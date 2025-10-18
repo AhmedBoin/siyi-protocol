@@ -1,0 +1,977 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<protocol name="SIYI_Gimbal_Camera_External_SDK_Protocol" stx="0x6655" stx_little="true" crc="crc16">
+  
+  <!-- ========================================================================= -->
+  <!-- Boolean Enum - For fields that are true/false or success/failure -->
+  <!-- ========================================================================= -->
+  
+  <enum name="BooleanStatus">
+    <variant name="Failed" value="0" description="Failed or Disabled"/>
+    <variant name="Success" value="1" description="Success or Enabled"/>
+  </enum>
+
+  <enum name="BooleanOnOff">
+    <variant name="Off" value="0" description="Off or Disabled"/>
+    <variant name="On" value="1" description="On or Enabled"/>
+  </enum>
+
+  <!-- ========================================================================= -->
+  <!-- Enumerations - Define all enum types used in messages -->
+  <!-- ========================================================================= -->
+  
+  <enum name="GimbalMode">
+    <variant name="Lock" value="0" description="Lock mode - gimbal maintains absolute orientation"/>
+    <variant name="Follow" value="1" description="Follow mode - gimbal follows vehicle yaw"/>
+    <variant name="FPV" value="2" description="FPV mode - gimbal follows all vehicle movements"/>
+  </enum>
+
+  <enum name="GimbalMountingDir">
+    <variant name="Reserved" value="0"/>
+    <variant name="Normal" value="1" description="Normal mounting"/>
+    <variant name="Inverted" value="2" description="Upside down mounting"/>
+  </enum>
+
+  <enum name="VideoOutput">
+    <variant name="HDMI" value="0" description="HDMI output ON, CVBS OFF"/>
+    <variant name="CVBS" value="1" description="HDMI output OFF, CVBS ON"/>
+  </enum>
+
+  <enum name="RecordingStatus">
+    <variant name="NotRecording" value="0"/>
+    <variant name="Recording" value="1"/>
+    <variant name="NoCard" value="2" description="No TF card"/>
+    <variant name="DataLoss" value="3" description="Video data loss"/>
+  </enum>
+
+  <enum name="FunctionType">
+    <variant name="TakePhoto" value="0"/>
+    <variant name="HDRToggle" value="1" description="Not supported"/>
+    <variant name="StartRecording" value="2"/>
+    <variant name="LockMode" value="3"/>
+    <variant name="FollowMode" value="4"/>
+    <variant name="FPVMode" value="5"/>
+    <variant name="EnableHDMI" value="6" description="Requires reboot"/>
+    <variant name="EnableCVBS" value="7" description="Requires reboot"/>
+    <variant name="DisableVideo" value="8" description="Disable HDMI/CVBS, requires reboot"/>
+    <variant name="TiltDownward" value="9"/>
+    <variant name="ZoomLinkage" value="10"/>
+  </enum>
+
+  <enum name="FeedbackInfoType">
+    <variant name="PhotoSuccess" value="0"/>
+    <variant name="PhotoFailed" value="1"/>
+    <variant name="HDROn" value="2"/>
+    <variant name="HDROff" value="3"/>
+    <variant name="RecordFailed" value="4"/>
+    <variant name="RecordStarted" value="5"/>
+    <variant name="RecordStopped" value="6"/>
+  </enum>
+
+  <enum name="CenterPosition">
+    <variant name="CenterOnly" value="1" description="One-key center"/>
+    <variant name="CenterDownward" value="2" description="Center then look down"/>
+    <variant name="Center" value="3"/>
+    <variant name="Downward" value="4"/>
+  </enum>
+
+  <enum name="PseudoColor">
+    <variant name="WhiteHot" value="0"/>
+    <variant name="Reserved" value="1"/>
+    <variant name="Sepia" value="2"/>
+    <variant name="Ironbow" value="3"/>
+    <variant name="Rainbow" value="4"/>
+    <variant name="Night" value="5"/>
+    <variant name="Aurora" value="6"/>
+    <variant name="RedHot" value="7"/>
+    <variant name="Jungle" value="8"/>
+    <variant name="Medical" value="9"/>
+    <variant name="BlackHot" value="10"/>
+    <variant name="GloryHot" value="11"/>
+  </enum>
+
+  <enum name="VideoEncType">
+    <variant name="H264" value="1"/>
+    <variant name="H265" value="2"/>
+  </enum>
+
+  <enum name="StreamType">
+    <variant name="Recording" value="0"/>
+    <variant name="Main" value="1"/>
+    <variant name="Sub" value="2"/>
+  </enum>
+
+  <enum name="TempMeasurementFlag">
+    <variant name="Disable" value="0"/>
+    <variant name="Once" value="1"/>
+    <variant name="Continuous" value="2" description="5Hz continuous measurement"/>
+  </enum>
+
+  <enum name="DataFrequency">
+    <variant name="Off" value="0"/>
+    <variant name="Hz2" value="1"/>
+    <variant name="Hz4" value="2"/>
+    <variant name="Hz5" value="3"/>
+    <variant name="Hz10" value="4"/>
+    <variant name="Hz20" value="5"/>
+    <variant name="Hz50" value="6"/>
+    <variant name="Hz100" value="7"/>
+  </enum>
+
+  <enum name="DataStreamType">
+    <variant name="Attitude" value="1"/>
+    <variant name="LaserRange" value="2"/>
+    <variant name="MagneticEncoder" value="3"/>
+    <variant name="MotorVoltage" value="4"/>
+  </enum>
+
+  <enum name="ThermalOutputMode">
+    <variant name="Fps30" value="0" description="30fps normal mode"/>
+    <variant name="Fps25WithTemp" value="1" description="25fps + temperature frame"/>
+  </enum>
+
+  <enum name="ThermalGainMode">
+    <variant name="LowGain" value="0"/>
+    <variant name="HighGain" value="1"/>
+  </enum>
+
+  <enum name="AITrackingStatus">
+    <variant name="NormalTracking" value="0" description="Normal tracking (AI)"/>
+    <variant name="IntermittentLoss" value="1" description="Can recover"/>
+    <variant name="Lost" value="2"/>
+    <variant name="UserCanceled" value="3"/>
+    <variant name="NormalTrackingAny" value="4" description="Tracking any object"/>
+  </enum>
+
+  <enum name="AITargetType">
+    <variant name="Human" value="0"/>
+    <variant name="Car" value="1"/>
+    <variant name="Bus" value="2"/>
+    <variant name="Truck" value="3"/>
+    <variant name="AnyObject" value="255"/>
+  </enum>
+
+  <enum name="ControlMode">
+    <variant name="AttitudeMode" value="0"/>
+    <variant name="WeakMode" value="1"/>
+    <variant name="MiddleMode" value="2"/>
+    <variant name="FPVMode" value="3"/>
+    <variant name="MotorClose" value="4"/>
+  </enum>
+
+  <enum name="FileType">
+    <variant name="Picture" value="0"/>
+    <variant name="TempRawFile" value="1"/>
+    <variant name="RecordVideo" value="2"/>
+  </enum>
+
+  <enum name="FileNameType">
+    <variant name="Reserve" value="0"/>
+    <variant name="Index" value="1"/>
+    <variant name="TimeStamp" value="2"/>
+  </enum>
+
+  <enum name="ThermalThresholdPrecision">
+    <variant name="MaxAccurate" value="1"/>
+    <variant name="MidAccurate" value="2"/>
+    <variant name="MinAccurate" value="3"/>
+  </enum>
+
+  <enum name="SingleAxisControl">
+    <variant name="YawControl" value="0"/>
+    <variant name="PitchControl" value="1"/>
+  </enum>
+
+  <!-- ========================================================================= -->
+  <!-- Messages - Format: <message name="X" id="0xYY" direction="request|response"> -->
+  <!-- ========================================================================= -->
+  
+  <!-- 0x00: TCP Heartbeat -->
+  <message name="TcpHeartbeat" id="0x00" direction="request" description="TCP heartbeat keepalive">
+    <!-- No data fields -->
+  </message>
+  
+  <!-- 0x01: Firmware Version -->
+  <message name="FirmwareVersionRequest" id="0x01" direction="request" description="Request firmware version">
+    <!-- No fields -->
+  </message>
+  
+  <message name="FirmwareVersionResponse" id="0x01" direction="response" description="Firmware version response">
+    <field name="camera_firmware_ver" type="uint32" description="Camera firmware version (ignore highest byte)"/>
+    <field name="gimbal_firmware_ver" type="uint32" description="Gimbal firmware version"/>
+    <field name="zoom_firmware_ver" type="uint32" description="Zoom module firmware version"/>
+  </message>
+  
+  <!-- 0x02: Hardware ID -->
+  <message name="HardwareIdRequest" id="0x02" direction="request" description="Get hardware ID">
+    <!-- No fields -->
+  </message>
+  
+  <message name="HardwareIdResponse" id="0x02" direction="response" description="Hardware ID response">
+    <field name="hardware_id" type="bytes[12]" description="10-digit hardware ID string"/>
+  </message>
+  
+  <!-- 0x04: Auto Focus -->
+  <message name="AutoFocusRequest" id="0x04" direction="request" description="Trigger auto focus">
+    <field name="auto_focus" type="uint8" description="1: Trigger single autofocus"/>
+    <field name="touch_x" type="uint16" description="X coordinate (video stream width)"/>
+    <field name="touch_y" type="uint16" description="Y coordinate (video stream height)"/>
+  </message>
+  
+  <message name="AutoFocusResponse" id="0x04" direction="response" description="Auto focus response">
+    <field name="status" type="enum" enum_type="BooleanStatus" description="Success or Error"/>
+  </message>
+  
+  <!-- 0x05: Manual Zoom -->
+  <message name="ManualZoomRequest" id="0x05" direction="request" description="Manual zoom control">
+    <field name="zoom" type="int8" description="1: Zoom in, 0: Stop, -1: Zoom out"/>
+  </message>
+  
+  <message name="ManualZoomResponse" id="0x05" direction="response" description="Manual zoom response">
+    <field name="zoom_multiple" type="uint16" description="Current zoom level * 10"/>
+  </message>
+  
+  <!-- 0x06: Manual Focus -->
+  <message name="ManualFocusRequest" id="0x06" direction="request" description="Manual focus control">
+    <field name="focus" type="int8" description="1: Far, 0: Stop, -1: Near"/>
+  </message>
+  
+  <message name="ManualFocusResponse" id="0x06" direction="response" description="Manual focus response">
+    <field name="status" type="enum" enum_type="BooleanStatus" description="Success or Error"/>
+  </message>
+  
+  <!-- 0x07: Gimbal Rotation -->
+  <message name="GimbalRotationRequest" id="0x07" direction="request" description="Control gimbal rotation">
+    <field name="yaw" type="int8" description="Yaw speed -100 to +100"/>
+    <field name="pitch" type="int8" description="Pitch speed -100 to +100"/>
+  </message>
+  
+  <message name="GimbalRotationResponse" id="0x07" direction="response" description="Gimbal rotation response">
+    <field name="status" type="enum" enum_type="BooleanStatus" description="Success or Error"/>
+  </message>
+  
+  <!-- 0x08: Center Gimbal -->
+  <message name="CenterGimbalRequest" id="0x08" direction="request" description="Center gimbal">
+    <field name="center_pos" type="enum" enum_type="CenterPosition" description="Center position mode"/>
+  </message>
+  
+  <message name="CenterGimbalResponse" id="0x08" direction="response" description="Center response">
+    <field name="status" type="enum" enum_type="BooleanStatus" description="Success or Error"/>
+  </message>
+  
+  <!-- 0x0A: Camera System Info -->
+  <message name="CameraSystemInfoRequest" id="0x0A" direction="request" description="Request camera system info">
+    <!-- No fields -->
+  </message>
+  
+  <message name="CameraSystemInfoResponse" id="0x0A" direction="response" description="Camera system info">
+    <field name="reserved1" type="uint8"/>
+    <field name="hdr_status" type="enum" enum_type="BooleanOnOff" description="HDR status"/>
+    <field name="reserved2" type="uint8"/>
+    <field name="record_status" type="enum" enum_type="RecordingStatus" description="Recording status"/>
+    <field name="gimbal_motion_mode" type="enum" enum_type="GimbalMode" description="Current gimbal mode"/>
+    <field name="gimbal_mounting_dir" type="enum" enum_type="GimbalMountingDir" description="Mounting direction"/>
+    <field name="video_output" type="enum" enum_type="VideoOutput" description="Video output status"/>
+    <field name="zoom_linkage" type="enum" enum_type="BooleanOnOff" description="Zoom linkage status"/>
+  </message>
+  
+  <!-- 0x0B: Function Feedback (sent by camera) -->
+  <message name="FunctionFeedback" id="0x0B" direction="response" description="Function feedback (sent by camera)">
+    <field name="info_type" type="enum" enum_type="FeedbackInfoType" description="Feedback type"/>
+  </message>
+  
+  <!-- 0x0C: Function Control (no ACK) -->
+  <message name="FunctionControl" id="0x0C" direction="request" description="Photo/video/mode control">
+    <field name="func_type" type="enum" enum_type="FunctionType" description="Function to execute"/>
+  </message>
+  
+  <!-- 0x0D: Gimbal Attitude -->
+  <message name="GimbalAttitudeRequest" id="0x0D" direction="request" description="Request gimbal attitude">
+    <!-- No fields -->
+  </message>
+  
+  <message name="GimbalAttitudeResponse" id="0x0D" direction="response" description="Gimbal attitude data">
+    <field name="yaw" type="int16" description="Yaw angle * 10 (degrees)"/>
+    <field name="pitch" type="int16" description="Pitch angle * 10 (degrees)"/>
+    <field name="roll" type="int16" description="Roll angle * 10 (degrees)"/>
+    <field name="yaw_velocity" type="int16" description="Yaw angular velocity"/>
+    <field name="pitch_velocity" type="int16" description="Pitch angular velocity"/>
+    <field name="roll_velocity" type="int16" description="Roll angular velocity"/>
+  </message>
+  
+  <!-- 0x0E: Set Gimbal Attitude -->
+  <message name="SetGimbalAttitudeRequest" id="0x0E" direction="request" description="Set gimbal angles">
+    <field name="yaw" type="int16" description="Target yaw * 10 (degrees)"/>
+    <field name="pitch" type="int16" description="Target pitch * 10 (degrees)"/>
+  </message>
+  
+  <message name="SetGimbalAttitudeResponse" id="0x0E" direction="response" description="Set attitude response">
+    <field name="yaw" type="int16" description="Current yaw * 10"/>
+    <field name="pitch" type="int16" description="Current pitch * 10"/>
+    <field name="roll" type="int16" description="Current roll * 10"/>
+  </message>
+  
+  <!-- 0x0F: Absolute Zoom -->
+  <message name="AbsoluteZoomRequest" id="0x0F" direction="request" description="Set absolute zoom level">
+    <field name="zoom_int" type="uint8" description="Integer part of zoom (1-30)"/>
+    <field name="zoom_float" type="uint8" description="Decimal part (0-9)"/>
+  </message>
+  
+  <message name="AbsoluteZoomResponse" id="0x0F" direction="response" description="Absolute zoom response">
+    <field name="status" type="enum" enum_type="BooleanStatus" description="Success"/>
+  </message>
+  
+  <!-- 0x10: Video Stitching Mode -->
+  <message name="VideoStitchingModeRequest" id="0x10" direction="request" description="Request video stitching mode">
+    <!-- No fields -->
+  </message>
+  
+  <message name="VideoStitchingModeResponse" id="0x10" direction="response" description="Video stitching mode">
+    <field name="vdisp_mode" type="uint8" description="0-8: various stitching/non-stitching modes"/>
+  </message>
+  
+  <!-- 0x11: Set Video Stitching Mode -->
+  <message name="SetVideoStitchingModeRequest" id="0x11" direction="request" description="Set video stitching mode">
+    <field name="vdisp_mode" type="uint8" description="0-8: stitching mode selection"/>
+  </message>
+  
+  <message name="SetVideoStitchingModeResponse" id="0x11" direction="response" description="Set mode response">
+    <field name="vdisp_mode" type="uint8" description="Confirmed mode"/>
+  </message>
+  
+  <!-- 0x12: Get Temperature at Point -->
+  <message name="GetTemperatureAtPointRequest" id="0x12" direction="request" description="Get temperature at point">
+    <field name="x" type="uint16" description="X coordinate"/>
+    <field name="y" type="uint16" description="Y coordinate"/>
+    <field name="get_temp_flag" type="enum" enum_type="TempMeasurementFlag" description="Measurement mode"/>
+  </message>
+  
+  <message name="GetTemperatureAtPointResponse" id="0x12" direction="response" description="Point temperature">
+    <field name="temp" type="uint16" description="Temperature * 100 (Celsius)"/>
+    <field name="x" type="uint16" description="X coordinate"/>
+    <field name="y" type="uint16" description="Y coordinate"/>
+  </message>
+  
+  <!-- 0x13: Local Temperature Measurement -->
+  <message name="LocalTemperatureMeasurementRequest" id="0x13" direction="request" description="Measure temperature in rectangle">
+    <field name="startx" type="uint16" description="Rectangle start X"/>
+    <field name="starty" type="uint16" description="Rectangle start Y"/>
+    <field name="endx" type="uint16" description="Rectangle end X"/>
+    <field name="endy" type="uint16" description="Rectangle end Y"/>
+    <field name="get_temp_flag" type="enum" enum_type="TempMeasurementFlag" description="Measurement mode"/>
+  </message>
+  
+  <message name="LocalTemperatureMeasurementResponse" id="0x13" direction="response" description="Local temperature data">
+    <field name="startx" type="uint16"/>
+    <field name="starty" type="uint16"/>
+    <field name="endx" type="uint16"/>
+    <field name="endy" type="uint16"/>
+    <field name="temp_max" type="uint16" description="Max temp * 100"/>
+    <field name="temp_min" type="uint16" description="Min temp * 100"/>
+    <field name="temp_max_x" type="uint16" description="Max temp X coord"/>
+    <field name="temp_max_y" type="uint16" description="Max temp Y coord"/>
+    <field name="temp_min_x" type="uint16" description="Min temp X coord"/>
+    <field name="temp_min_y" type="uint16" description="Min temp Y coord"/>
+  </message>
+  
+  <!-- 0x14: Global Temperature Measurement -->
+  <message name="GlobalTemperatureMeasurementRequest" id="0x14" direction="request" description="Measure global temperature">
+    <field name="get_temp_flag" type="enum" enum_type="TempMeasurementFlag" description="Measurement mode"/>
+  </message>
+  
+  <message name="GlobalTemperatureMeasurementResponse" id="0x14" direction="response" description="Global temperature data">
+    <field name="temp_max" type="uint16" description="Max temp * 100"/>
+    <field name="temp_min" type="uint16" description="Min temp * 100"/>
+    <field name="temp_max_x" type="uint16"/>
+    <field name="temp_max_y" type="uint16"/>
+    <field name="temp_min_x" type="uint16"/>
+    <field name="temp_min_y" type="uint16"/>
+  </message>
+  
+  <!-- 0x15: Laser Distance -->
+  <message name="LaserDistanceRequest" id="0x15" direction="request" description="Request laser rangefinder distance">
+    <!-- No fields -->
+  </message>
+  
+  <message name="LaserDistanceResponse" id="0x15" direction="response" description="Laser distance">
+    <field name="laser_distance" type="uint16" description="Distance in decimeters (dm), min 50"/>
+  </message>
+  
+  <!-- 0x16: Max Zoom Range -->
+  <message name="MaxZoomRangeRequest" id="0x16" direction="request" description="Request max zoom range">
+    <!-- No fields -->
+  </message>
+  
+  <message name="MaxZoomRangeResponse" id="0x16" direction="response" description="Max zoom range">
+    <field name="zoom_max_int" type="uint8" description="Max zoom integer part"/>
+    <field name="zoom_max_float" type="uint8" description="Max zoom decimal part"/>
+  </message>
+  
+  <!-- 0x17: Laser Target Location -->
+  <message name="LaserTargetLocationRequest" id="0x17" direction="request" description="Request target lat/lon">
+    <!-- No fields -->
+  </message>
+  
+  <message name="LaserTargetLocationResponse" id="0x17" direction="response" description="Target location">
+    <field name="lon_degE7" type="int32" description="Longitude * 1e7 (WGS84)"/>
+    <field name="lat_degE7" type="int32" description="Latitude * 1e7 (WGS84)"/>
+  </message>
+  
+  <!-- 0x18: Current Zoom -->
+  <message name="CurrentZoomRequest" id="0x18" direction="request" description="Request current zoom level">
+    <!-- No fields -->
+  </message>
+  
+  <message name="CurrentZoomResponse" id="0x18" direction="response" description="Current zoom">
+    <field name="zoom_int" type="uint8" description="Zoom integer part"/>
+    <field name="zoom_float" type="uint8" description="Zoom decimal part"/>
+  </message>
+  
+  <!-- 0x19: Gimbal Mode -->
+  <message name="GimbalModeRequest" id="0x19" direction="request" description="Request current gimbal mode">
+    <!-- No fields -->
+  </message>
+  
+  <message name="GimbalModeResponse" id="0x19" direction="response" description="Gimbal mode">
+    <field name="gimbal_mode" type="enum" enum_type="GimbalMode" description="Current mode"/>
+  </message>
+  
+  <!-- 0x1A: Pseudo Color -->
+  <message name="PseudoColorRequest" id="0x1A" direction="request" description="Request thermal pseudo-color">
+    <!-- No fields -->
+  </message>
+  
+  <message name="PseudoColorResponse" id="0x1A" direction="response" description="Pseudo-color">
+    <field name="pseudo_color" type="enum" enum_type="PseudoColor" description="Current color palette"/>
+  </message>
+  
+  <!-- 0x1B: Set Pseudo Color -->
+  <message name="SetPseudoColorRequest" id="0x1B" direction="request" description="Set thermal pseudo-color">
+    <field name="pseudo_color" type="enum" enum_type="PseudoColor" description="Color palette to set"/>
+  </message>
+  
+  <message name="SetPseudoColorResponse" id="0x1B" direction="response" description="Set pseudo-color response">
+    <field name="pseudo_color" type="enum" enum_type="PseudoColor" description="Confirmed color"/>
+  </message>
+  
+  <!-- 0x20: Encoding Params -->
+  <message name="EncodingParamsRequest" id="0x20" direction="request" description="Request camera encoding params">
+    <field name="stream_type" type="enum" enum_type="StreamType" description="Which stream"/>
+  </message>
+  
+  <message name="EncodingParamsResponse" id="0x20" direction="response" description="Encoding parameters">
+    <field name="stream_type" type="enum" enum_type="StreamType"/>
+    <field name="video_enc_type" type="enum" enum_type="VideoEncType" description="H264/H265"/>
+    <field name="resolution_w" type="uint16" description="Width"/>
+    <field name="resolution_h" type="uint16" description="Height"/>
+    <field name="video_bitrate" type="uint16" description="Bitrate in Kbps"/>
+    <field name="video_framerate" type="uint8" description="Frame rate"/>
+  </message>
+  
+  <!-- 0x21: Set Encoding Params -->
+  <message name="SetEncodingParamsRequest" id="0x21" direction="request" description="Set camera encoding params">
+    <field name="stream_type" type="enum" enum_type="StreamType"/>
+    <field name="video_enc_type" type="enum" enum_type="VideoEncType"/>
+    <field name="resolution_w" type="uint16" description="Width (1920/1280)"/>
+    <field name="resolution_h" type="uint16" description="Height (1080/720)"/>
+    <field name="video_bitrate" type="uint16" description="Bitrate in Kbps"/>
+    <field name="reserved" type="uint8"/>
+  </message>
+  
+  <message name="SetEncodingParamsResponse" id="0x21" direction="response" description="Set encoding response">
+    <field name="stream_type" type="enum" enum_type="StreamType"/>
+    <field name="status" type="enum" enum_type="BooleanStatus" description="Success or Failure"/>
+  </message>
+  
+  <!-- 0x22: Send Aircraft Attitude (no ACK) -->
+  <message name="SendAircraftAttitude" id="0x22" direction="request" description="Send aircraft attitude to gimbal">
+    <field name="time_boot_ms" type="uint32" description="Time since boot (ms)"/>
+    <field name="roll" type="float32" description="Roll (radians)"/>
+    <field name="pitch" type="float32" description="Pitch (radians)"/>
+    <field name="yaw" type="float32" description="Yaw (radians)"/>
+    <field name="rollspeed" type="float32" description="Roll rate (rad/s)"/>
+    <field name="pitchspeed" type="float32" description="Pitch rate (rad/s)"/>
+    <field name="yawspeed" type="float32" description="Yaw rate (rad/s)"/>
+  </message>
+
+  <!-- 0x23: Send RC Channel Data to Gimbal (Not in Use) -->
+  <message name="SendRcChannelDataRequest" id="0x23" direction="request" description="Send RC channel data to gimbal">
+    <field name="chan1_raw" type="uint16" description="RC channel 1 value [us]"/>
+    <field name="chan2_raw" type="uint16" description="RC channel 2 value [us]"/>
+    <field name="chan3_raw" type="uint16" description="RC channel 3 value [us]"/>
+    <field name="chan4_raw" type="uint16" description="RC channel 4 value [us]"/>
+    <field name="chan5_raw" type="uint16" description="RC channel 5 value [us]"/>
+    <field name="chan6_raw" type="uint16" description="RC channel 6 value [us]"/>
+    <field name="chan7_raw" type="uint16" description="RC channel 7 value [us]"/>
+    <field name="chan8_raw" type="uint16" description="RC channel 8 value [us]"/>
+    <field name="chan9_raw" type="uint16" description="RC channel 9 value [us]"/>
+    <field name="chan10_raw" type="uint16" description="RC channel 10 value [us]"/>
+    <field name="chan11_raw" type="uint16" description="RC channel 11 value [us]"/>
+    <field name="chan12_raw" type="uint16" description="RC channel 12 value [us]"/>
+    <field name="chan13_raw" type="uint16" description="RC channel 13 value [us]"/>
+    <field name="chan14_raw" type="uint16" description="RC channel 14 value [us]"/>
+    <field name="chan15_raw" type="uint16" description="RC channel 15 value [us]"/>
+    <field name="chan16_raw" type="uint16" description="RC channel 16 value [us]"/>
+    <field name="chan17_raw" type="uint16" description="RC channel 17 value [us]"/>
+    <field name="chan18_raw" type="uint16" description="RC channel 18 value [us]"/>
+    <field name="chancount" type="uint8" description="Total number of RC channels"/>
+    <field name="rssi" type="uint8" description="Receive signal strength indicator [0-254], 255: invalid"/>
+  </message>
+
+  <!-- 0x24: Request Flight Controller to Send Data Stream to Gimbal -->
+  <message name="RequestFlightControllerDataStreamRequest" id="0x24" direction="request" description="Request flight controller to send data stream">
+    <field name="data_type" type="enum" enum_type="DataStreamType" description="Data stream type"/>
+    <field name="data_freq" type="enum" enum_type="DataFrequency" description="Output frequency"/>
+  </message>
+
+  <message name="RequestFlightControllerDataStreamResponse" id="0x24" direction="response" description="Flight controller data stream response">
+    <field name="data_type" type="enum" enum_type="DataStreamType" description="Confirmed data type"/>
+  </message>
+
+  <!-- 0x25: Request Data Stream -->
+  <message name="RequestDataStreamRequest" id="0x25" direction="request" description="Request gimbal data stream">
+    <field name="data_type" type="enum" enum_type="DataStreamType" description="Data stream type"/>
+    <field name="data_freq" type="enum" enum_type="DataFrequency" description="Frequency"/>
+  </message>
+  
+  <message name="RequestDataStreamResponse" id="0x25" direction="response" description="Data stream config response">
+    <field name="data_type" type="enum" enum_type="DataStreamType" description="Confirmed data type"/>
+  </message>
+
+  <!-- 0x26: Magnetic Encoder Angle -->
+  <message name="MagneticEncoderAngleRequest" id="0x26" direction="request" description="Request magnetic encoder angles">
+    <!-- No fields -->
+  </message>
+
+  <message name="MagneticEncoderAngleResponse" id="0x26" direction="response" description="Magnetic encoder angles">
+    <field name="yaw_angle" type="int16" description="Yaw * 10"/>
+    <field name="pitch_angle" type="int16" description="Pitch * 10"/>
+    <field name="roll_angle" type="int16" description="Roll * 10"/>
+  </message>
+
+  <!-- 0x27: Gimbal Control Mode (ArduPilot only) -->
+  <message name="GimbalControlModeRequest" id="0x27" direction="request" description="Request gimbal control mode">
+    <!-- No fields -->
+  </message>
+
+  <message name="GimbalControlModeResponse" id="0x27" direction="response" description="Gimbal control mode">
+    <field name="control_mode" type="enum" enum_type="ControlMode" description="Current control mode"/>
+  </message>
+
+  <!-- 0x28: Gimbal Weak Control Threshold (ArduPilot only) -->
+  <message name="WeakControlThresholdRequest" id="0x28" direction="request" description="Request weak control threshold">
+    <!-- No fields -->
+  </message>
+
+  <message name="WeakControlThresholdResponse" id="0x28" direction="response" description="Weak control threshold data">
+    <field name="weak_control_limit_value" type="int16" description="Voltage limit range * 10 (10-50)"/>
+    <field name="voltage_threshold" type="int16" description="Voltage threshold * 10 (20-50)"/>
+    <field name="angular_error_threshold" type="int16" description="Angular error threshold * 10 (30-300)"/>
+  </message>
+
+  <!-- 0x29: Set Weak Control Threshold (ArduPilot only) -->
+  <message name="SetWeakControlThresholdRequest" id="0x29" direction="request" description="Set weak control threshold">
+    <field name="weak_control_limit_value" type="int16" description="Voltage limit range * 10 (10-50)"/>
+    <field name="voltage_threshold" type="int16" description="Voltage threshold * 10 (20-50)"/>
+    <field name="angular_error_threshold" type="int16" description="Angular error threshold * 10 (30-300)"/>
+  </message>
+
+  <message name="SetWeakControlThresholdResponse" id="0x29" direction="response" description="Set threshold response">
+    <field name="status" type="enum" enum_type="BooleanStatus" description="Success or Failure"/>
+  </message>
+
+  <!-- 0x2A: Motor Voltage -->
+  <message name="MotorVoltageRequest" id="0x2A" direction="request" description="Request motor voltage">
+    <!-- No fields -->
+  </message>
+
+  <message name="MotorVoltageResponse" id="0x2A" direction="response" description="Motor voltage data">
+    <field name="yaw_voltage" type="int16" description="Yaw motor voltage * 1000"/>
+    <field name="pitch_voltage" type="int16" description="Pitch motor voltage * 1000"/>
+    <field name="roll_voltage" type="int16" description="Roll motor voltage * 1000"/>
+  </message>
+  
+  <!-- 0x30: Set UTC Time -->
+  <message name="SetUtcTimeRequest" id="0x30" direction="request" description="Set UTC time">
+    <field name="timestamp" type="uint64" description="UNIX epoch time (microseconds)"/>
+  </message>
+  
+  <message name="SetUtcTimeResponse" id="0x30" direction="response" description="UTC time response">
+    <field name="status" type="enum" enum_type="BooleanStatus" description="Success or Invalid"/>
+  </message>
+
+  <!-- 0x31: Gimbal System Info -->
+  <message name="GimbalSystemInfoRequest" id="0x31" direction="request" description="Request gimbal system information">
+    <!-- No fields -->
+  </message>
+
+  <message name="GimbalSystemInfoResponse" id="0x31" direction="response" description="Gimbal system info">
+    <field name="laser_state" type="enum" enum_type="BooleanOnOff" description="Laser enabled or disabled"/>
+  </message>
+
+  <!-- 0x32: Set Laser State -->
+  <message name="SetLaserStateRequest" id="0x32" direction="request" description="Set laser ranging state">
+    <field name="laser_state" type="enum" enum_type="BooleanOnOff" description="Enable or Disable"/>
+  </message>
+
+  <message name="SetLaserStateResponse" id="0x32" direction="response" description="Laser state response">
+    <field name="status" type="enum" enum_type="BooleanStatus" description="Success or Failed"/>
+  </message>
+
+  <!-- 0x33: Thermal Output Mode -->
+  <message name="ThermalOutputModeRequest" id="0x33" direction="request" description="Request thermal output mode">
+    <!-- No fields -->
+  </message>
+
+  <message name="ThermalOutputModeResponse" id="0x33" direction="response" description="Thermal output mode">
+    <field name="mode" type="enum" enum_type="ThermalOutputMode" description="Output mode"/>
+  </message>
+
+  <!-- 0x34: Set Thermal Output Mode -->
+  <message name="SetThermalOutputModeRequest" id="0x34" direction="request" description="Set thermal output mode">
+    <field name="mode" type="enum" enum_type="ThermalOutputMode" description="Output mode to set"/>
+  </message>
+
+  <message name="SetThermalOutputModeResponse" id="0x34" direction="response" description="Set thermal output mode response">
+    <field name="mode" type="enum" enum_type="ThermalOutputMode" description="Confirmed mode"/>
+  </message>
+
+  <!-- 0x35: Get Single Temperature Frame -->
+  <message name="GetSingleTemperatureFrameRequest" id="0x35" direction="request" description="Get single temperature frame">
+    <!-- No fields -->
+  </message>
+
+  <message name="GetSingleTemperatureFrameResponse" id="0x35" direction="response" description="Single temperature frame response">
+    <field name="ack" type="enum" enum_type="BooleanStatus" description="Acquisition successful or failed"/>
+  </message>
+
+  <!-- 0x37: Thermal Gain Mode -->
+  <message name="ThermalGainModeRequest" id="0x37" direction="request" description="Request thermal gain mode">
+    <!-- No fields -->
+  </message>
+
+  <message name="ThermalGainModeResponse" id="0x37" direction="response" description="Thermal gain mode">
+    <field name="ir_gain" type="enum" enum_type="ThermalGainMode" description="Current gain mode"/>
+  </message>
+
+  <!-- 0x38: Set Thermal Gain Mode -->
+  <message name="SetThermalGainModeRequest" id="0x38" direction="request" description="Set thermal gain mode">
+    <field name="ir_gain" type="enum" enum_type="ThermalGainMode" description="Gain mode to set"/>
+  </message>
+
+  <message name="SetThermalGainModeResponse" id="0x38" direction="response" description="Set thermal gain mode response">
+    <field name="ir_gain" type="enum" enum_type="ThermalGainMode" description="Confirmed gain mode"/>
+  </message>
+
+  <!-- 0x39: Thermal Environmental Correction Parameters -->
+  <message name="ThermalEnvCorrectionParamsRequest" id="0x39" direction="request" description="Request thermal env correction params">
+    <!-- No fields -->
+  </message>
+
+  <message name="ThermalEnvCorrectionParamsResponse" id="0x39" direction="response" description="Thermal env correction params">
+    <field name="dist" type="uint16" description="Distance (m) * 100"/>
+    <field name="ems" type="uint16" description="Target emissivity (%) * 100"/>
+    <field name="hum" type="uint16" description="Environmental humidity (%) * 100"/>
+    <field name="ta" type="uint16" description="Atmospheric temperature (°C) * 100"/>
+    <field name="tu" type="uint16" description="Reflective temperature (°C) * 100"/>
+  </message>
+
+  <!-- 0x3A: Set Thermal Environmental Correction Parameters -->
+  <message name="SetThermalEnvCorrectionParamsRequest" id="0x3A" direction="request" description="Set thermal env correction params">
+    <field name="dist" type="uint16" description="Distance (m) * 100"/>
+    <field name="ems" type="uint16" description="Target emissivity (%) * 100"/>
+    <field name="hum" type="uint16" description="Environmental humidity (%) * 100"/>
+    <field name="ta" type="uint16" description="Atmospheric temperature (°C) * 100"/>
+    <field name="tu" type="uint16" description="Reflective temperature (°C) * 100"/>
+  </message>
+
+  <message name="SetThermalEnvCorrectionParamsResponse" id="0x3A" direction="response" description="Set env correction params response">
+    <field name="ack" type="enum" enum_type="BooleanStatus" description="Successfully set or failed"/>
+  </message>
+
+  <!-- 0x3B: Thermal Environmental Correction Switch -->
+  <message name="ThermalEnvCorrectionSwitchRequest" id="0x3B" direction="request" description="Request env correction switch">
+    <!-- No fields -->
+  </message>
+
+  <message name="ThermalEnvCorrectionSwitchResponse" id="0x3B" direction="response" description="Env correction switch">
+    <field name="env_correct" type="enum" enum_type="BooleanOnOff" description="Off or On"/>
+  </message>
+
+  <!-- 0x3C: Set Thermal Environmental Correction Switch -->
+  <message name="SetThermalEnvCorrectionSwitchRequest" id="0x3C" direction="request" description="Set env correction switch">
+    <field name="env_correct" type="enum" enum_type="BooleanOnOff" description="Off or On"/>
+  </message>
+
+  <message name="SetThermalEnvCorrectionSwitchResponse" id="0x3C" direction="response" description="Set env correction switch response">
+    <field name="env_correct" type="enum" enum_type="BooleanOnOff" description="Off or On"/>
+  </message>
+
+  <!-- 0x3E: Send GPS Data -->
+  <message name="SendGpsData" id="0x3E" direction="request" description="Send GPS raw data to gimbal">
+    <field name="time_boot_ms" type="uint32" description="Time since boot (ms)"/>
+    <field name="lat" type="int32" description="Latitude [degE7]"/>
+    <field name="lon" type="int32" description="Longitude [degE7]"/>
+    <field name="alt" type="int32" description="Altitude MSL (cm)"/>
+    <field name="alt_ellipsoid" type="int32" description="Altitude above WGS84 (cm)"/>
+    <field name="vn" type="int32" description="X Speed [m*1000/s]"/>
+    <field name="ve" type="int32" description="Y Speed [m*1000/s]"/>
+    <field name="vd" type="int32" description="Z Speed [m*1000/s]"/>
+  </message>
+
+  <!-- 0x40: System Time -->
+  <message name="SystemTimeRequest" id="0x40" direction="request" description="Request system time">
+    <!-- No fields -->
+  </message>
+
+  <message name="SystemTimeResponse" id="0x40" direction="response" description="System time">
+    <field name="time_unix_usec" type="uint64" description="UNIX epoch time (μs)"/>
+    <field name="time_boot_ms" type="uint32" description="Time since system startup (ms)"/>
+  </message>
+
+  <!-- 0x41: Single Axis Attitude Control -->
+  <message name="SingleAxisAttitudeRequest" id="0x41" direction="request" description="Set single-axis attitude angle">
+    <field name="angle" type="int16" description="Target angle * 10"/>
+    <field name="single_control_flag" type="enum" enum_type="SingleAxisControl" description="Axis to control"/>
+  </message>
+
+  <message name="SingleAxisAttitudeResponse" id="0x41" direction="response" description="Single-axis attitude response">
+    <field name="yaw" type="int16" description="Current yaw * 10"/>
+    <field name="pitch" type="int16" description="Current pitch * 10"/>
+    <field name="roll" type="int16" description="Current roll * 10"/>
+  </message>
+
+  <!-- 0x42: Thermal Threshold Switch -->
+  <message name="ThermalThresholdSwitchRequest" id="0x42" direction="request" description="Request thermal threshold switch">
+    <!-- No fields -->
+  </message>
+
+  <message name="ThermalThresholdSwitchResponse" id="0x42" direction="response" description="Thermal threshold switch">
+    <field name="ir_thresh_sta" type="enum" enum_type="BooleanOnOff" description="Off or On"/>
+  </message>
+
+  <!-- 0x43: Set Thermal Threshold Switch -->
+  <message name="SetThermalThresholdSwitchRequest" id="0x43" direction="request" description="Set thermal threshold switch">
+    <field name="ir_thresh_sta" type="enum" enum_type="BooleanOnOff" description="Off or On"/>
+  </message>
+
+  <message name="SetThermalThresholdSwitchResponse" id="0x43" direction="response" description="Set thermal threshold switch response">
+    <field name="ir_thresh_sta" type="enum" enum_type="BooleanOnOff" description="Off or On"/>
+  </message>
+
+  <!-- 0x44: Thermal Threshold Parameters -->
+  <message name="ThermalThresholdParamsRequest" id="0x44" direction="request" description="Request thermal threshold params">
+    <!-- No fields -->
+  </message>
+
+  <message name="ThermalThresholdParamsResponse" id="0x44" direction="response" description="Thermal threshold params">
+    <field name="thresh1_switch" type="enum" enum_type="BooleanOnOff" description="Threshold region 1: hide or display"/>
+    <field name="thresh1_temp_min" type="int16" description="Threshold 1 min temp"/>
+    <field name="thresh1_temp_max" type="int16" description="Threshold 1 max temp"/>
+    <field name="thresh1_color_r" type="uint8" description="Threshold 1 color R"/>
+    <field name="thresh1_color_g" type="uint8" description="Threshold 1 color G"/>
+    <field name="thresh1_color_b" type="uint8" description="Threshold 1 color B"/>
+    <field name="thresh2_switch" type="enum" enum_type="BooleanOnOff" description="Threshold region 2: hide or display"/>
+    <field name="thresh2_temp_min" type="int16" description="Threshold 2 min temp"/>
+    <field name="thresh2_temp_max" type="int16" description="Threshold 2 max temp"/>
+    <field name="thresh2_color_r" type="uint8" description="Threshold 2 color R"/>
+    <field name="thresh2_color_g" type="uint8" description="Threshold 2 color G"/>
+    <field name="thresh2_color_b" type="uint8" description="Threshold 2 color B"/>
+    <field name="thresh3_switch" type="enum" enum_type="BooleanOnOff" description="Threshold region 3: hide or display"/>
+    <field name="thresh3_temp_min" type="int16" description="Threshold 3 min temp"/>
+    <field name="thresh3_temp_max" type="int16" description="Threshold 3 max temp"/>
+    <field name="thresh3_color_r" type="uint8" description="Threshold 3 color R"/>
+    <field name="thresh3_color_g" type="uint8" description="Threshold 3 color G"/>
+    <field name="thresh3_color_b" type="uint8" description="Threshold 3 color B"/>
+  </message>
+
+  <!-- 0x45: Set Thermal Threshold Parameters -->
+  <message name="SetThermalThresholdParamsRequest" id="0x45" direction="request" description="Set thermal threshold params">
+    <field name="thresh1_switch" type="enum" enum_type="BooleanOnOff" description="Threshold region 1: hide or display"/>
+    <field name="thresh1_temp_min" type="int16" description="Threshold 1 min temp"/>
+    <field name="thresh1_temp_max" type="int16" description="Threshold 1 max temp"/>
+    <field name="thresh1_color_r" type="uint8" description="Threshold 1 color R"/>
+    <field name="thresh1_color_g" type="uint8" description="Threshold 1 color G"/>
+    <field name="thresh1_color_b" type="uint8" description="Threshold 1 color B"/>
+    <field name="thresh2_switch" type="enum" enum_type="BooleanOnOff" description="Threshold region 2: hide or display"/>
+    <field name="thresh2_temp_min" type="int16" description="Threshold 2 min temp"/>
+    <field name="thresh2_temp_max" type="int16" description="Threshold 2 max temp"/>
+    <field name="thresh2_color_r" type="uint8" description="Threshold 2 color R"/>
+    <field name="thresh2_color_g" type="uint8" description="Threshold 2 color G"/>
+    <field name="thresh2_color_b" type="uint8" description="Threshold 2 color B"/>
+    <field name="thresh3_switch" type="enum" enum_type="BooleanOnOff" description="Threshold region 3: hide or display"/>
+    <field name="thresh3_temp_min" type="int16" description="Threshold 3 min temp"/>
+    <field name="thresh3_temp_max" type="int16" description="Threshold 3 max temp"/>
+    <field name="thresh3_color_r" type="uint8" description="Threshold 3 color R"/>
+    <field name="thresh3_color_g" type="uint8" description="Threshold 3 color G"/>
+    <field name="thresh3_color_b" type="uint8" description="Threshold 3 color B"/>
+  </message>
+
+  <message name="SetThermalThresholdParamsResponse" id="0x45" direction="response" description="Set thermal threshold params response">
+    <field name="ack" type="enum" enum_type="BooleanStatus" description="Success or failed"/>
+  </message>
+
+  <!-- 0x46: Thermal Threshold Precision -->
+  <message name="ThermalThresholdPrecisionRequest" id="0x46" direction="request" description="Request thermal threshold precision">
+    <!-- No fields -->
+  </message>
+
+  <message name="ThermalThresholdPrecisionResponse" id="0x46" direction="response" description="Thermal threshold precision">
+    <field name="precision" type="enum" enum_type="ThermalThresholdPrecision" description="Precision level"/>
+  </message>
+
+  <!-- 0x47: Set Thermal Threshold Precision -->
+  <message name="SetThermalThresholdPrecisionRequest" id="0x47" direction="request" description="Set thermal threshold precision">
+    <field name="precision" type="enum" enum_type="ThermalThresholdPrecision" description="Precision level"/>
+  </message>
+
+  <message name="SetThermalThresholdPrecisionResponse" id="0x47" direction="response" description="Set thermal threshold precision response">
+    <field name="precision" type="enum" enum_type="ThermalThresholdPrecision" description="Confirmed precision"/>
+  </message>
+
+  <!-- 0x48: Format SD Card -->
+  <message name="FormatSdCardRequest" id="0x48" direction="request" description="Format SD card">
+    <field name="format_sta" type="enum" enum_type="BooleanStatus" description="Format failed or successful"/>
+  </message>
+
+  <message name="FormatSdCardResponse" id="0x48" direction="response" description="Format SD card response">
+    <field name="format_sta" type="enum" enum_type="BooleanStatus" description="Format failed or successful"/>
+  </message>
+
+  <!-- 0x49: Get Picture Name Type -->
+  <message name="GetPictureNameTypeRequest" id="0x49" direction="request" description="Get picture name type">
+    <field name="file_type" type="enum" enum_type="FileType" description="File type"/>
+  </message>
+
+  <message name="GetPictureNameTypeResponse" id="0x49" direction="response" description="Picture name type">
+    <field name="file_type" type="enum" enum_type="FileType" description="File type"/>
+    <field name="file_name_type" type="enum" enum_type="FileNameType" description="File naming type"/>
+  </message>
+
+  <!-- 0x4A: Set Picture Name Type -->
+  <message name="SetPictureNameTypeRequest" id="0x4A" direction="request" description="Set picture name type">
+    <field name="file_type" type="enum" enum_type="FileType" description="File type"/>
+    <field name="file_name_type" type="enum" enum_type="FileNameType" description="File naming type"/>
+  </message>
+
+  <message name="SetPictureNameTypeResponse" id="0x4A" direction="response" description="Set picture name type response">
+    <field name="file_type" type="enum" enum_type="FileType" description="File type"/>
+    <field name="file_name_type" type="enum" enum_type="FileNameType" description="File naming type"/>
+  </message>
+
+  <!-- 0x4B: HDMI OSD Status -->
+  <message name="HdmiOsdStatusRequest" id="0x4B" direction="request" description="Request HDMI OSD status">
+    <!-- No fields -->
+  </message>
+
+  <message name="HdmiOsdStatusResponse" id="0x4B" direction="response" description="HDMI OSD status">
+    <field name="osd_sta" type="enum" enum_type="BooleanOnOff" description="Off or On"/>
+  </message>
+
+  <!-- 0x4C: Set HDMI OSD Status -->
+  <message name="SetHdmiOsdStatusRequest" id="0x4C" direction="request" description="Set HDMI OSD status">
+    <field name="osd_sta" type="enum" enum_type="BooleanOnOff" description="Off or On"/>
+  </message>
+
+  <message name="SetHdmiOsdStatusResponse" id="0x4C" direction="response" description="Set HDMI OSD status response">
+    <field name="osd_sta" type="enum" enum_type="BooleanOnOff" description="Off or On"/>
+  </message>
+
+  <!-- 0x4D: AI Mode Status -->
+  <message name="AiModeStatusRequest" id="0x4D" direction="request" description="Get AI mode status">
+    <!-- No fields -->
+  </message>
+
+  <message name="AiModeStatusResponse" id="0x4D" direction="response" description="AI mode status">
+    <field name="sta" type="enum" enum_type="BooleanOnOff" description="Not enabled or AI mode enabled"/>
+  </message>
+
+  <!-- 0x4E: AI Tracking Coordinate Stream Status -->
+  <message name="AiTrackingStreamStatusRequest" id="0x4E" direction="request" description="Get AI tracking stream status">
+    <!-- No fields -->
+  </message>
+
+  <message name="AiTrackingStreamStatusResponse" id="0x4E" direction="response" description="AI tracking stream status">
+    <field name="sta" type="uint8" description="0: Not enabled, 1: Outputting, 2: AI not enabled, 3: Tracking not enabled"/>
+  </message>
+
+  <!-- 0x4F: Manually Update Thermal Shutter -->
+  <message name="UpdateThermalShutterRequest" id="0x4F" direction="request" description="Manually update thermal shutter">
+    <!-- No fields -->
+  </message>
+
+  <message name="UpdateThermalShutterResponse" id="0x4F" direction="response" description="Update thermal shutter response">
+    <field name="ack" type="enum" enum_type="BooleanStatus" description="Update successful or failed"/>
+  </message>
+
+  <!-- 0x50: AI Tracking Coordinate Stream -->
+  <message name="AiTrackingCoordinateStream" id="0x50" direction="response" description="AI tracking coordinate stream">
+    <field name="pos_x" type="uint16" description="Target tracking coordinate X"/>
+    <field name="pos_y" type="uint16" description="Target tracking coordinate Y"/>
+    <field name="pos_width" type="uint16" description="Target tracking box width"/>
+    <field name="pos_height" type="uint16" description="Target tracking box height"/>
+    <field name="target_id" type="enum" enum_type="AITargetType" description="Target type ID"/>
+    <field name="track_sta" type="enum" enum_type="AITrackingStatus" description="Tracking status"/>
+  </message>
+
+  <!-- 0x51: Set AI Tracking Stream Status -->
+  <message name="SetAiTrackingStreamStatusRequest" id="0x51" direction="request" description="Set AI tracking stream status">
+    <field name="track_action" type="enum" enum_type="BooleanOnOff" description="Enable or Disable output"/>
+  </message>
+
+  <message name="SetAiTrackingStreamStatusResponse" id="0x51" direction="response" description="Set AI tracking stream response">
+    <field name="sta" type="enum" enum_type="BooleanOnOff" description="Output enabled or disabled"/>
+  </message>
+
+  <!-- 0x70: Weak Control Mode -->
+  <message name="WeakControlModeRequest" id="0x70" direction="request" description="Request weak control mode">
+    <!-- No fields -->
+  </message>
+
+  <message name="WeakControlModeResponse" id="0x70" direction="response" description="Weak control mode">
+    <field name="weak_mode_state" type="enum" enum_type="BooleanOnOff" description="Enabled or Disabled"/>
+  </message>
+
+  <!-- 0x71: Set Weak Control Mode -->
+  <message name="SetWeakControlModeRequest" id="0x71" direction="request" description="Set weak control mode">
+    <field name="weak_mode_state" type="enum" enum_type="BooleanOnOff" description="Enable or Disable"/>
+  </message>
+
+  <message name="SetWeakControlModeResponse" id="0x71" direction="response" description="Set weak control mode response">
+    <field name="sta" type="enum" enum_type="BooleanStatus" description="Success or Failure"/>
+    <field name="weak_mode_state" type="enum" enum_type="BooleanOnOff" description="Enabled or Disabled"/>
+  </message>
+
+  <!-- 0x80: Gimbal Camera Soft Reboot -->
+  <message name="SoftRebootRequest" id="0x80" direction="request" description="Gimbal camera soft reboot">
+    <field name="camera_reboot" type="enum" enum_type="BooleanOnOff" description="No action or Camera reboot"/>
+    <field name="gimbal_reset" type="enum" enum_type="BooleanOnOff" description="No action or Gimbal reboot"/>
+  </message>
+
+  <message name="SoftRebootResponse" id="0x80" direction="response" description="Soft reboot response">
+    <field name="camera_reboot_sta" type="enum" enum_type="BooleanOnOff" description="No action or Camera rebooting"/>
+    <field name="gimbal_reset_sta" type="enum" enum_type="BooleanOnOff" description="No action or Gimbal rebooting"/>
+  </message>
+
+  <!-- 0x81: Get IP Address -->
+  <message name="GetIpAddressRequest" id="0x81" direction="request" description="Get gimbal camera IP address">
+    <!-- No fields -->
+  </message>
+
+  <message name="GetIpAddressResponse" id="0x81" direction="response" description="IP address">
+    <field name="ip" type="uint32" description="IP Address"/>
+    <field name="mask" type="uint32" description="Subnet Mask"/>
+    <field name="gateway" type="uint32" description="Gateway"/>
+  </message>
+
+  <!-- 0x82: Set IP Address -->
+  <message name="SetIpAddressRequest" id="0x82" direction="request" description="Set gimbal camera IP address">
+    <field name="ip" type="uint32" description="IP Address"/>
+    <field name="mask" type="uint32" description="Subnet Mask"/>
+    <field name="gateway" type="uint32" description="Gateway"/>
+  </message>
+
+  <message name="SetIpAddressResponse" id="0x82" direction="response" description="Set IP address response">
+    <field name="ack" type="enum" enum_type="BooleanStatus" description="Successfully set or failed"/>
+  </message>
+
+</protocol>
