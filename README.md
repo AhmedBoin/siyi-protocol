@@ -1,282 +1,326 @@
-# SIYI Protocol Code Generator
+# SIYI Protocol
 
-A protocol code generator that converts SIYI Gimbal Camera SDK protocol definitions from XML to type-safe Rust code. The generator produces bare-metal compatible code with no heap allocations, making it suitable for embedded systems, RTOS environments, and standard applications.
-
-## Overview
-
-This tool reads the SIYI protocol specification from an XML file and generates Rust message structures, serialization/deserialization logic, and a byte-by-byte state machine parser for serial communication.
-
-### Design Philosophy
-
-The protocol definition is maintained in XML format to:
-- Enable easy updates when SIYI releases protocol changes
-- Allow generation of implementations in other programming languages
-- Provide a single source of truth for the protocol specification
-- Separate protocol definition from implementation details
+A type-safe, no_std compatible Rust implementation of the SIYI Gimbal Camera SDK protocol. This crate provides message definitions and serialization/deserialization for communicating with SIYI camera systems over TCP, UDP, or serial (TTL) connections.
 
 ## Features
 
-### Generated Code Characteristics
+- **No heap allocation** - Works in `no_std` environments without `alloc`
+- **Zero-copy parsing** - Efficient deserialization with minimal overhead
+- **Compile-time filtering** - Only include messages for your specific hardware
+- **Protocol verification** - Type-safe message construction with CRC16 validation
+- **Feature-gated modules** - Small binary size by including only what you need
 
-- **No heap allocation**: Works without `alloc` or `std`
-- **State machine parser**: Byte-by-byte parsing for UART/Serial
-- **CRC16 validation**: Built-in checksum verification
-- **Type-safe enumerations**: Protocol enums with validation
-- **Fixed-size buffers**: Compile-time known memory requirements
+## Supported Hardware
 
-### Protocol Format
+- **ZT30** - Quad-sensor gimbal camera
+- **ZT6** - Thermal imaging camera
+- **ZR30** - Long-range camera system  
+- **ZR10** - Standard gimbal camera
+- **A8mini** - Compact gimbal camera
+- **A2mini** - Entry-level gimbal camera
 
-The SIYI protocol uses the following frame structure:
+## Supported Protocols
+
+- **TCP** - Network communication over TCP/IP
+- **UDP** - Network communication over UDP
+- **TTL** - Serial UART communication
+
+## Installation
+
+Add this to your `Cargo.toml`:
+
+```toml
+[dependencies]
+siyi-protocol = "0.1"
+```
+
+### Selecting Your Configuration
+
+Use feature flags to include only the messages your hardware supports. This significantly reduces code size and compilation time.
+
+```toml
+[dependencies]
+siyi-protocol = { version = "0.1", features = ["zt30", "tcp"] }
+```
+
+For multiple protocols or cameras:
+
+```toml
+[dependencies]
+siyi-protocol = { version = "0.1", features = ["zr10", "tcp", "udp"] }
+```
+
+To include everything (not recommended for embedded):
+
+```toml
+[dependencies]
+siyi-protocol = { version = "0.1", features = ["all"] }
+```
+
+## Quick Start
+
+### Serializing Messages
+
+```rust
+use siyi_protocol::zt30_tcp::*;
+
+fn main() {
+    // Create a request for firmware version
+    let request = FirmwareVersionRequest::new();
+    
+    // Encode the message to a buffer
+    let mut msg_buf = [0u8; MAX_MESSAGE_SIZE];
+    let msg_len = request.encode(&mut msg_buf).unwrap();
+    
+    // Create a frame with the encoded message
+    let mut frame_buf = [0u8; MAX_FRAME_SIZE];
+    let frame = request.to_frame(&msg_buf[..msg_len]);
+    let frame_len = frame.encode(&mut frame_buf).unwrap();
+    
+    // Send frame_buf[..frame_len] over your transport
+    // socket.send(&frame_buf[..frame_len])?;
+}
+```
+
+### Deserializing Messages
+
+```rust
+use siyi_protocol::zt30_tcp::*;
+
+fn main() {
+    // Receive data from your transport
+    let mut recv_buf = [0u8; MAX_FRAME_SIZE];
+    // let recv_len = socket.recv(&mut recv_buf)?;
+    
+    // Decode the frame
+    let frame = Frame::decode(&recv_buf[..recv_len]).unwrap();
+    
+    // Decode the message from the frame
+    let message = Message::from_frame(&frame).unwrap();
+    
+    // Handle the message
+    match message {
+        Message::FirmwareVersionResponse(resp) => {
+            println!("Camera FW: {}", resp.camera_firmware_ver);
+            println!("Gimbal FW: {}", resp.gimbal_firmware_ver);
+        }
+        Message::GimbalAttitudeResponse(resp) => {
+            println!("Yaw: {:.1}°", resp.yaw as f32 / 10.0);
+            println!("Pitch: {:.1}°", resp.pitch as f32 / 10.0);
+        }
+        _ => println!("Other message received"),
+    }
+}
+```
+
+## Protocol Overview
+
+The SIYI protocol uses a binary frame format:
 
 ```
-+--------+------+---------+-----+--------+------+---------+-------+
-| STX    | CTRL | DATALEN | SEQ | CMD_ID | DATA | CRC16   |       |
-| 2 bytes| 1    | 2       | 2   | 1      | N    | 2 bytes | Total |
-+--------+------+---------+-----+--------+------+---------+-------+
+┌─────────┬──────┬─────────┬─────┬────────┬──────┬────────┐
+│   STX   │ CTRL │ DATALEN │ SEQ │ CMD_ID │ DATA │  CRC16 │
+│ 2 bytes │  1   │    2    │  2  │   1    │  N   │   2    │
+└─────────┴──────┴─────────┴─────┴────────┴──────┴────────┘
 ```
 
 - **STX**: Start marker (0x6655, little-endian)
-- **CTRL**: Control byte (bit 0: need_ack, bit 1: is_ack)
-- **DATALEN**: Data payload length (little-endian)
-- **SEQ**: Frame sequence number (little-endian)
+- **CTRL**: Control flags (bit 0: need_ack, bit 1: is_ack)
+- **DATALEN**: Payload length (little-endian)
+- **SEQ**: Sequence number (little-endian)
 - **CMD_ID**: Command identifier
 - **DATA**: Message payload
-- **CRC16**: Checksum (little-endian)
+- **CRC16**: Checksum using CRC16-CCITT
 
-## Usage
+All multi-byte fields use little-endian byte order.
 
-### Basic Generation
+## Message Categories
 
-Generate bare-metal compatible code (default):
+### Camera Control
+- `FirmwareVersionRequest/Response` - Get firmware versions
+- `HardwareIdRequest/Response` - Get device hardware ID
+- `AutoFocusRequest/Response` - Trigger autofocus
+- `ManualZoomRequest/Response` - Control zoom level
+- `AbsoluteZoomRequest/Response` - Set specific zoom level
 
-```bash
-python gen_rust_from_xml_nostd.py siyi_protocol.xml -o protocol.rs
-```
+### Gimbal Control
+- `GimbalRotationRequest/Response` - Control gimbal movement
+- `GimbalAttitudeRequest/Response` - Get current angles
+- `SetGimbalAttitudeRequest/Response` - Set target angles
+- `CenterGimbalRequest/Response` - Reset to center position
+- `GimbalModeRequest/Response` - Get/set gimbal mode
 
-Generate with standard library support:
+### Recording and Photo
+- `FunctionControl` - Take photo, start/stop recording
+- `FunctionFeedback` - Camera feedback events
+- `CameraSystemInfoRequest/Response` - Get system status
 
-```bash
-python gen_rust_from_xml_nostd.py siyi_protocol.xml --std -o protocol.rs
-```
+### Thermal Imaging (ZT30, ZT6)
+- `GetTemperatureAtPointRequest/Response` - Point temperature
+- `LocalTemperatureMeasurementRequest/Response` - Area temperature
+- `GlobalTemperatureMeasurementRequest/Response` - Full frame
+- `PseudoColorRequest/Response` - Get/set thermal palette
+- `ThermalGainModeRequest/Response` - Configure gain mode
 
-### Command Line Options
+### Laser Ranging (ZT30, ZR10, ZR30)
+- `LaserDistanceRequest/Response` - Get range measurement
+- `LaserTargetLocationRequest/Response` - Get target GPS coordinates
+- `SetLaserStateRequest/Response` - Enable/disable laser
 
-```
-usage: gen_rust_from_xml3_nostd_stateful.py [-h] [-o OUTPUT] [--std] xml_file
+### Video Configuration (TCP only)
+- `EncodingParamsRequest/Response` - Get encoding settings
+- `SetEncodingParamsRequest/Response` - Configure video encoding
+- `VideoStitchingModeRequest/Response` - Multi-sensor stitching
 
-positional arguments:
-  xml_file              Protocol XML file
-
-optional arguments:
-  -h, --help            show this help message and exit
-  -o OUTPUT, --output OUTPUT
-                        Output file path (stdout if not specified)
-  --std                 Generate with std support (default: no_std)
-```
-
-## Integration
-
-The generated file contains message definitions and protocol utilities. You'll need to integrate it with your own transport layer and application logic.
-
-### Example: Serial/UART Communication
-
-```rust
-use protocol::*;
-
-let mut parser = FrameParser::new();
-let mut uart = /* your UART peripheral */;
-
-loop {
-    if let Some(byte) = uart.read_byte() {
-        match parser.feed(byte) {
-            Ok(Some(frame)) => {
-                // Complete frame received
-                match Message::decode(&frame) {
-                    Ok(msg) => handle_message(msg),
-                    Err(e) => log_error(e),
-                }
-            }
-            Ok(None) => {
-                // Still receiving frame
-            }
-            Err(e) => {
-                // Frame error, parser automatically resets
-                log_error(e);
-            }
-        }
-    }
-}
-```
-
-### Example: UDP/TCP Communication
-
-```rust
-use protocol::*;
-
-let mut socket = /* your socket */;
-let mut buffer = [0u8; MAX_FRAME_SIZE];
-
-loop {
-    let len = socket.recv(&mut buffer)?;
-    
-    match bytes_to_message(&buffer[..len]) {
-        Ok(message) => {
-            // Process complete message
-            match message {
-                Message::FirmwareVersionRequest(_) => send_version(),
-                Message::GimbalAttitudeResponse(resp) => {
-                    println!("Yaw: {}, Pitch: {}", resp.yaw, resp.pitch);
-                }
-                _ => {}
-            }
-        }
-        Err(e) => eprintln!("Decode error: {:?}", e),
-    }
-}
-```
-
-### Helper Functions
-
-The generator provides four main helper functions:
-
-```rust
-// Serialize frame to bytes (adds STX and CRC16)
-pub fn frame_to_bytes(frame: &Frame, buf: &mut [u8]) -> Result<usize, EncodeError>
-
-// Deserialize bytes to frame (validates STX and CRC16)
-pub fn bytes_to_frame(data: &[u8]) -> Result<Frame, DecodeError>
-
-// Serialize message to complete frame bytes
-pub fn message_to_bytes(msg: &Message, buf: &mut [u8]) -> Result<usize, EncodeError>
-
-// Deserialize bytes to message (validates and decodes)
-pub fn bytes_to_message(data: &[u8]) -> Result<Message, DecodeError>
-```
-
-## XML Protocol Definition
-
-### Structure
-
-The XML file defines the protocol using these elements:
-
-```xml
-<protocol name="SIYI_Protocol" stx="0x6655" stx_little="true" crc="crc16">
-  <enum name="GimbalMode">
-    <variant name="Lock" value="0" description="Lock mode"/>
-    <variant name="Follow" value="1" description="Follow mode"/>
-  </enum>
-  
-  <message name="FirmwareVersionRequest" id="0x01" direction="request">
-    <!-- No fields for this request -->
-  </message>
-  
-  <message name="FirmwareVersionResponse" id="0x01" direction="response">
-    <field name="camera_firmware_ver" type="uint32" description="Camera firmware version"/>
-    <field name="gimbal_firmware_ver" type="uint32" description="Gimbal firmware version"/>
-  </message>
-</protocol>
-```
-
-### Supported Field Types
-
-- Primitives: `uint8`, `int8`, `uint16`, `int16`, `uint32`, `int32`, `uint64`, `int64`, `float32`, `float64`
-- Fixed arrays: `bytes[N]` where N is the array size
-- Variable data: `bytes` (generates fixed 256-byte buffer with length field)
-- Enumerations: `enum` with `enum_type` attribute
-
-### Adding New Messages
-
-1. Open `siyi_protocol.xml`
-2. Add your message definition:
-
-```xml
-<message name="MyNewRequest" id="0xAB" direction="request">
-  <field name="param1" type="uint16" description="First parameter"/>
-  <field name="param2" type="int32" description="Second parameter"/>
-</message>
-
-<message name="MyNewResponse" id="0xAB" direction="response">
-  <field name="result" type="uint8" description="Result code"/>
-</message>
-```
-
-3. Regenerate the Rust code:
-
-```bash
-python gen_rust_from_xml_nostd.py siyi_protocol.xml -o siyi_protocol.rs
-```
+### AI Features (ZT30, ZT6, A8mini)
+- `AiModeStatusRequest/Response` - Check AI module status
+- `AiTrackingCoordinateStream` - Real-time tracking data
+- `SetAiTrackingStreamStatusRequest/Response` - Control tracking output
 
 ## Memory Requirements
 
-The generated code uses fixed-size buffers with compile-time known sizes:
+The crate uses fixed-size buffers with compile-time known sizes. No heap allocation is required.
 
-- `MAX_MESSAGE_SIZE`: Calculated from largest message in protocol (default: 512 bytes)
-- `MAX_FRAME_SIZE`: `MAX_MESSAGE_SIZE + 10` bytes for frame overhead
+- **Message encoding buffer**: ~512 bytes (stack)
+- **Frame encoding buffer**: ~522 bytes (stack)
+- **Per-message overhead**: Varies by message type (typically 4-64 bytes)
 
-Stack usage per operation:
-- Frame encoding: ~522 bytes
-- Frame parsing: ~522 bytes (state machine buffer)
-- Message structures: Varies by message type
+All buffers are stack-allocated. The exact size depends on which messages you include via feature flags.
 
-No heap allocation is required. All operations use stack-allocated buffers.
+## Transport Layer Integration
 
-## State Machine Parser
+This crate provides only message definitions and serialization. You need to implement your own transport layer:
 
-The byte-by-byte parser handles common serial communication issues:
+### TCP Example
 
-- **Shifted frames**: Correctly resyncs when STX bytes are misaligned
-- **Partial frames**: Accumulates bytes until complete frame received
-- **CRC validation**: Automatically validates and rejects corrupted frames
-- **Auto-reset**: Resets state after frame completion or errors
+```rust
+use std::net::TcpStream;
+use std::io::{Read, Write};
+use siyi_protocol::zt30_tcp::*;
 
-### Parser States
+let mut stream = TcpStream::connect("192.168.144.25:37260")?;
 
-The parser transitions through these states:
+// Send request
+let request = GimbalAttitudeRequest::new();
+let mut msg_buf = [0u8; MAX_MESSAGE_SIZE];
+let mut frame_buf = [0u8; MAX_FRAME_SIZE];
 
-1. `Stx1`: Waiting for first STX byte
-2. `Stx2`: Waiting for second STX byte
-3. `Ctrl`: Reading control byte
-4. `Len1/Len2`: Reading data length
-5. `Seq1/Seq2`: Reading sequence number
-6. `Cmd`: Reading command ID
-7. `Data`: Accumulating payload bytes
-8. `Crc1/Crc2`: Reading and validating checksum
+let msg_len = request.encode(&mut msg_buf)?;
+let frame = request.to_frame(&msg_buf[..msg_len]);
+let frame_len = frame.encode(&mut frame_buf)?;
 
-## Extending to Other Languages
+stream.write_all(&frame_buf[..frame_len])?;
 
-The XML-based approach allows generation of protocol implementations in other languages:
+// Receive response
+let mut recv_buf = [0u8; MAX_FRAME_SIZE];
+let recv_len = stream.read(&mut recv_buf)?;
 
-1. Create a new generator script (e.g., `gen_cpp_from_xml.py`, `gen_python_from_xml.py`)
-2. Parse the same `siyi_protocol.xml` file
-3. Generate language-specific structures and serialization code
-4. Implement the same state machine logic for serial communication
+let frame = Frame::decode(&recv_buf[..recv_len])?;
+let message = Message::from_frame(&frame)?;
+```
 
-The protocol definition remains unchanged across all language implementations.
+### Serial (TTL) Example
 
-## Requirements
+```rust
+use serialport::SerialPort;
+use siyi_protocol::zr10_ttl::*;
 
-- Python 3.6 or higher (for code generation)
-- Rust 1.60 or higher (for generated code)
+let mut port = serialport::new("/dev/ttyUSB0", 115200)
+    .timeout(Duration::from_millis(100))
+    .open()?;
 
-No external Python dependencies required. The generator uses only standard library modules.
+// Send and receive similar to TCP example
+```
+
+## Error Handling
+
+The crate provides two error types:
+
+```rust
+pub enum EncodeError {
+    BufferTooSmall,
+}
+
+pub enum DecodeError {
+    FrameTooShort,
+    InvalidStx,
+    FrameIncomplete,
+    CrcMismatch,
+    NotEnoughBytes,
+    InvalidEnumValue,
+    ConversionError,
+    UnknownCmdId,
+}
+```
+
+Both implement `Debug`, `Clone`, `Copy`, `PartialEq`, and `Eq` for easy error handling.
+
+## Code Generation
+
+This crate is generated from an XML protocol definition using a Python script. The XML format allows:
+
+- Single source of truth for the protocol
+- Easy updates when SIYI releases new firmware
+- Generation of implementations in other languages
+- Clear documentation of protocol differences between camera models
+
+To regenerate the code after modifying the XML:
+
+```bash
+./generate_all.sh
+```
+
+This creates optimized modules for each camera/protocol combination.
+
+## Feature Flag Reference
+
+### Protocol Features
+- `tcp` - Enable TCP protocol messages
+- `udp` - Enable UDP protocol messages  
+- `ttl` - Enable serial (TTL) protocol messages
+
+### Camera Features
+- `zt30` - SIYI ZT30 camera support
+- `zt6` - SIYI ZT6 camera support
+- `zr30` - SIYI ZR30 camera support
+- `zr10` - SIYI ZR10 camera support
+- `a8mini` - SIYI A8mini camera support
+- `a2mini` - SIYI A2mini camera support
+
+### Combined Feature
+- `all` - Enable all protocols and cameras (large binary size)
+
+## Examples
+
+See the `examples/` directory:
+
+- `serialize_messages.rs` - Demonstrates message encoding
+- `deserialize_messages.rs` - Demonstrates message decoding
+
+Run examples with:
+
+```bash
+cargo run --example serialize_messages --features "zt30,tcp"
+cargo run --example deserialize_messages --features "zt30,tcp"
+```
 
 ## License
 
-This tool is provided as-is for use with SIYI gimbal camera systems. Refer to SIYI's official documentation for protocol specifications and licensing terms.
+This project is licensed under the MIT License - see the LICENSE file for details.
 
-## Related Documentation
+## Acknowledgments
 
-- SIYI SDK Protocol Documentation
-- SIYI Gimbal Camera User Manual
-- CRC16 CCITT Standard (G(X) = X^16 + X^12 + X^5 + 1)
+Protocol specification based on the SIYI Gimbal Camera External SDK Protocol documentation.
 
-## Notes
+## Contributing
 
-The generated code is the message definition layer. You are responsible for implementing:
-- Transport layer (UART, UDP, TCP)
-- Connection management
-- Message routing and handling
-- Application-specific logic
-- Error recovery strategies
+Contributions are welcome! Please ensure:
 
-The state machine parser handles frame-level parsing but does not manage connections or implement retry logic.
+1. Protocol changes are made in the XML file, not generated Rust code
+2. Run `./generate_all.sh` after XML modifications
+3. Test with real hardware when possible
+4. Update documentation for any API changes
+
+## Support
+
+For protocol questions, refer to the official SIYI SDK documentation. For issues with this crate, please file an issue on the repository.

@@ -1,22 +1,20 @@
-// Auto-generated SIYI Protocol - No Lifetimes - State Machine Parser
-// Protocol: SIYI_Gimbal_Camera_External_SDK_Protocol
-
+// Auto-generated from SIYI_Gimbal_Camera_External_SDK_Protocol
+// Protocol: TCP
+// Camera: ZT6
 #![no_std]
-#![allow(dead_code, unused, non_snake_case)]
-
+#![allow(dead_code, clippy::derivable_impls, unused, non_snake_case)]
 use core::convert::TryInto;
-
 pub const STX: u16 = 0x6655;
+pub const STX_LITTLE: bool = true;
 pub const MAX_MESSAGE_SIZE: usize = 512;
 pub const MAX_FRAME_SIZE: usize = 522;
-
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum EncodeError {
     BufferTooSmall,
 }
-
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum DecodeError {
+    FrameTooShort,
     InvalidStx,
     FrameIncomplete,
     CrcMismatch,
@@ -50,9 +48,8 @@ const CRC16_TAB: [u16; 256] = [
     0xef1f, 0xff3e, 0xcf5d, 0xdf7c, 0xaf9b, 0xbfba, 0x8fd9, 0x9ff8, 0x6e17, 0x7e36, 0x4e55, 0x5e74,
     0x2e93, 0x3eb2, 0xed1, 0x1ef0,
 ];
-
-pub const fn crc16_calc(data: &[u8]) -> u16 {
-    let mut crc = 0u16;
+pub const fn crc16_calc(data: &[u8], crc_init: u16) -> u16 {
+    let mut crc = crc_init;
     let mut i = 0;
     while i < data.len() {
         crc = (crc << 8) ^ CRC16_TAB[((crc >> 8) as u8 ^ data[i]) as usize];
@@ -61,20 +58,20 @@ pub const fn crc16_calc(data: &[u8]) -> u16 {
     crc
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub struct CtrlByte {
     pub need_ack: bool,
     pub is_ack: bool,
 }
 impl CtrlByte {
-    pub const fn from_u8(v: u8) -> Self {
+    pub const fn from_u8(val: u8) -> Self {
         Self {
-            need_ack: (v & 1) != 0,
-            is_ack: (v & 2) != 0,
+            need_ack: (val & 1) != 0,
+            is_ack: (val & 2) != 0,
         }
     }
     pub const fn to_u8(&self) -> u8 {
-        (self.need_ack as u8) | ((self.is_ack as u8) << 1)
+        (if self.need_ack { 1 } else { 0 }) | (if self.is_ack { 2 } else { 0 })
     }
     pub const fn request() -> Self {
         Self {
@@ -88,24 +85,27 @@ impl CtrlByte {
             is_ack: true,
         }
     }
+    pub const fn is_request(&self) -> bool {
+        !self.is_ack
+    }
+    pub const fn is_response(&self) -> bool {
+        self.is_ack
+    }
 }
 impl Default for CtrlByte {
     fn default() -> Self {
         Self::request()
     }
 }
-
 #[repr(u8)]
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord)]
 pub enum BooleanStatus {
-    /// Failed or Disabled
     Failed = 0,
-    /// Success or Enabled
     Success = 1,
 }
 impl BooleanStatus {
-    pub const fn from_u8(v: u8) -> Option<Self> {
-        match v {
+    pub const fn from_u8(val: u8) -> Option<Self> {
+        match val {
             0 => Some(Self::Failed),
             1 => Some(Self::Success),
             _ => None,
@@ -120,18 +120,15 @@ impl Default for BooleanStatus {
         Self::Failed
     }
 }
-
 #[repr(u8)]
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord)]
 pub enum BooleanOnOff {
-    /// Off or Disabled
     Off = 0,
-    /// On or Enabled
     On = 1,
 }
 impl BooleanOnOff {
-    pub const fn from_u8(v: u8) -> Option<Self> {
-        match v {
+    pub const fn from_u8(val: u8) -> Option<Self> {
+        match val {
             0 => Some(Self::Off),
             1 => Some(Self::On),
             _ => None,
@@ -146,20 +143,16 @@ impl Default for BooleanOnOff {
         Self::Off
     }
 }
-
 #[repr(u8)]
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord)]
 pub enum GimbalMode {
-    /// Lock mode - gimbal maintains absolute orientation
     Lock = 0,
-    /// Follow mode - gimbal follows vehicle yaw
     Follow = 1,
-    /// FPV mode - gimbal follows all vehicle movements
     FPV = 2,
 }
 impl GimbalMode {
-    pub const fn from_u8(v: u8) -> Option<Self> {
-        match v {
+    pub const fn from_u8(val: u8) -> Option<Self> {
+        match val {
             0 => Some(Self::Lock),
             1 => Some(Self::Follow),
             2 => Some(Self::FPV),
@@ -175,19 +168,16 @@ impl Default for GimbalMode {
         Self::Lock
     }
 }
-
 #[repr(u8)]
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord)]
 pub enum GimbalMountingDir {
     Reserved = 0,
-    /// Normal mounting
     Normal = 1,
-    /// Upside down mounting
     Inverted = 2,
 }
 impl GimbalMountingDir {
-    pub const fn from_u8(v: u8) -> Option<Self> {
-        match v {
+    pub const fn from_u8(val: u8) -> Option<Self> {
+        match val {
             0 => Some(Self::Reserved),
             1 => Some(Self::Normal),
             2 => Some(Self::Inverted),
@@ -203,18 +193,15 @@ impl Default for GimbalMountingDir {
         Self::Reserved
     }
 }
-
 #[repr(u8)]
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord)]
 pub enum VideoOutput {
-    /// HDMI output ON, CVBS OFF
     HDMI = 0,
-    /// HDMI output OFF, CVBS ON
     CVBS = 1,
 }
 impl VideoOutput {
-    pub const fn from_u8(v: u8) -> Option<Self> {
-        match v {
+    pub const fn from_u8(val: u8) -> Option<Self> {
+        match val {
             0 => Some(Self::HDMI),
             1 => Some(Self::CVBS),
             _ => None,
@@ -229,20 +216,17 @@ impl Default for VideoOutput {
         Self::HDMI
     }
 }
-
 #[repr(u8)]
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord)]
 pub enum RecordingStatus {
     NotRecording = 0,
     Recording = 1,
-    /// No TF card
     NoCard = 2,
-    /// Video data loss
     DataLoss = 3,
 }
 impl RecordingStatus {
-    pub const fn from_u8(v: u8) -> Option<Self> {
-        match v {
+    pub const fn from_u8(val: u8) -> Option<Self> {
+        match val {
             0 => Some(Self::NotRecording),
             1 => Some(Self::Recording),
             2 => Some(Self::NoCard),
@@ -259,29 +243,24 @@ impl Default for RecordingStatus {
         Self::NotRecording
     }
 }
-
 #[repr(u8)]
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord)]
 pub enum FunctionType {
     TakePhoto = 0,
-    /// Not supported
     HDRToggle = 1,
     StartRecording = 2,
     LockMode = 3,
     FollowMode = 4,
     FPVMode = 5,
-    /// Requires reboot
     EnableHDMI = 6,
-    /// Requires reboot
     EnableCVBS = 7,
-    /// Disable HDMI/CVBS, requires reboot
     DisableVideo = 8,
     TiltDownward = 9,
     ZoomLinkage = 10,
 }
 impl FunctionType {
-    pub const fn from_u8(v: u8) -> Option<Self> {
-        match v {
+    pub const fn from_u8(val: u8) -> Option<Self> {
+        match val {
             0 => Some(Self::TakePhoto),
             1 => Some(Self::HDRToggle),
             2 => Some(Self::StartRecording),
@@ -305,9 +284,8 @@ impl Default for FunctionType {
         Self::TakePhoto
     }
 }
-
 #[repr(u8)]
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord)]
 pub enum FeedbackInfoType {
     PhotoSuccess = 0,
     PhotoFailed = 1,
@@ -318,8 +296,8 @@ pub enum FeedbackInfoType {
     RecordStopped = 6,
 }
 impl FeedbackInfoType {
-    pub const fn from_u8(v: u8) -> Option<Self> {
-        match v {
+    pub const fn from_u8(val: u8) -> Option<Self> {
+        match val {
             0 => Some(Self::PhotoSuccess),
             1 => Some(Self::PhotoFailed),
             2 => Some(Self::HDROn),
@@ -339,20 +317,17 @@ impl Default for FeedbackInfoType {
         Self::PhotoSuccess
     }
 }
-
 #[repr(u8)]
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord)]
 pub enum CenterPosition {
-    /// One-key center
     CenterOnly = 1,
-    /// Center then look down
     CenterDownward = 2,
     Center = 3,
     Downward = 4,
 }
 impl CenterPosition {
-    pub const fn from_u8(v: u8) -> Option<Self> {
-        match v {
+    pub const fn from_u8(val: u8) -> Option<Self> {
+        match val {
             1 => Some(Self::CenterOnly),
             2 => Some(Self::CenterDownward),
             3 => Some(Self::Center),
@@ -369,9 +344,8 @@ impl Default for CenterPosition {
         Self::CenterOnly
     }
 }
-
 #[repr(u8)]
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord)]
 pub enum PseudoColor {
     WhiteHot = 0,
     Reserved = 1,
@@ -387,8 +361,8 @@ pub enum PseudoColor {
     GloryHot = 11,
 }
 impl PseudoColor {
-    pub const fn from_u8(v: u8) -> Option<Self> {
-        match v {
+    pub const fn from_u8(val: u8) -> Option<Self> {
+        match val {
             0 => Some(Self::WhiteHot),
             1 => Some(Self::Reserved),
             2 => Some(Self::Sepia),
@@ -413,16 +387,15 @@ impl Default for PseudoColor {
         Self::WhiteHot
     }
 }
-
 #[repr(u8)]
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord)]
 pub enum VideoEncType {
     H264 = 1,
     H265 = 2,
 }
 impl VideoEncType {
-    pub const fn from_u8(v: u8) -> Option<Self> {
-        match v {
+    pub const fn from_u8(val: u8) -> Option<Self> {
+        match val {
             1 => Some(Self::H264),
             2 => Some(Self::H265),
             _ => None,
@@ -437,17 +410,16 @@ impl Default for VideoEncType {
         Self::H264
     }
 }
-
 #[repr(u8)]
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord)]
 pub enum StreamType {
     Recording = 0,
     Main = 1,
     Sub = 2,
 }
 impl StreamType {
-    pub const fn from_u8(v: u8) -> Option<Self> {
-        match v {
+    pub const fn from_u8(val: u8) -> Option<Self> {
+        match val {
             0 => Some(Self::Recording),
             1 => Some(Self::Main),
             2 => Some(Self::Sub),
@@ -463,18 +435,16 @@ impl Default for StreamType {
         Self::Recording
     }
 }
-
 #[repr(u8)]
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord)]
 pub enum TempMeasurementFlag {
     Disable = 0,
     Once = 1,
-    /// 5Hz continuous measurement
     Continuous = 2,
 }
 impl TempMeasurementFlag {
-    pub const fn from_u8(v: u8) -> Option<Self> {
-        match v {
+    pub const fn from_u8(val: u8) -> Option<Self> {
+        match val {
             0 => Some(Self::Disable),
             1 => Some(Self::Once),
             2 => Some(Self::Continuous),
@@ -490,9 +460,8 @@ impl Default for TempMeasurementFlag {
         Self::Disable
     }
 }
-
 #[repr(u8)]
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord)]
 pub enum DataFrequency {
     Off = 0,
     Hz2 = 1,
@@ -504,8 +473,8 @@ pub enum DataFrequency {
     Hz100 = 7,
 }
 impl DataFrequency {
-    pub const fn from_u8(v: u8) -> Option<Self> {
-        match v {
+    pub const fn from_u8(val: u8) -> Option<Self> {
+        match val {
             0 => Some(Self::Off),
             1 => Some(Self::Hz2),
             2 => Some(Self::Hz4),
@@ -526,9 +495,8 @@ impl Default for DataFrequency {
         Self::Off
     }
 }
-
 #[repr(u8)]
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord)]
 pub enum DataStreamType {
     Attitude = 1,
     LaserRange = 2,
@@ -536,8 +504,8 @@ pub enum DataStreamType {
     MotorVoltage = 4,
 }
 impl DataStreamType {
-    pub const fn from_u8(v: u8) -> Option<Self> {
-        match v {
+    pub const fn from_u8(val: u8) -> Option<Self> {
+        match val {
             1 => Some(Self::Attitude),
             2 => Some(Self::LaserRange),
             3 => Some(Self::MagneticEncoder),
@@ -554,18 +522,15 @@ impl Default for DataStreamType {
         Self::Attitude
     }
 }
-
 #[repr(u8)]
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord)]
 pub enum ThermalOutputMode {
-    /// 30fps normal mode
     Fps30 = 0,
-    /// 25fps + temperature frame
     Fps25WithTemp = 1,
 }
 impl ThermalOutputMode {
-    pub const fn from_u8(v: u8) -> Option<Self> {
-        match v {
+    pub const fn from_u8(val: u8) -> Option<Self> {
+        match val {
             0 => Some(Self::Fps30),
             1 => Some(Self::Fps25WithTemp),
             _ => None,
@@ -580,16 +545,15 @@ impl Default for ThermalOutputMode {
         Self::Fps30
     }
 }
-
 #[repr(u8)]
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord)]
 pub enum ThermalGainMode {
     LowGain = 0,
     HighGain = 1,
 }
 impl ThermalGainMode {
-    pub const fn from_u8(v: u8) -> Option<Self> {
-        match v {
+    pub const fn from_u8(val: u8) -> Option<Self> {
+        match val {
             0 => Some(Self::LowGain),
             1 => Some(Self::HighGain),
             _ => None,
@@ -604,22 +568,18 @@ impl Default for ThermalGainMode {
         Self::LowGain
     }
 }
-
 #[repr(u8)]
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord)]
 pub enum AITrackingStatus {
-    /// Normal tracking (AI)
     NormalTracking = 0,
-    /// Can recover
     IntermittentLoss = 1,
     Lost = 2,
     UserCanceled = 3,
-    /// Tracking any object
     NormalTrackingAny = 4,
 }
 impl AITrackingStatus {
-    pub const fn from_u8(v: u8) -> Option<Self> {
-        match v {
+    pub const fn from_u8(val: u8) -> Option<Self> {
+        match val {
             0 => Some(Self::NormalTracking),
             1 => Some(Self::IntermittentLoss),
             2 => Some(Self::Lost),
@@ -637,9 +597,8 @@ impl Default for AITrackingStatus {
         Self::NormalTracking
     }
 }
-
 #[repr(u8)]
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord)]
 pub enum AITargetType {
     Human = 0,
     Car = 1,
@@ -648,8 +607,8 @@ pub enum AITargetType {
     AnyObject = 255,
 }
 impl AITargetType {
-    pub const fn from_u8(v: u8) -> Option<Self> {
-        match v {
+    pub const fn from_u8(val: u8) -> Option<Self> {
+        match val {
             0 => Some(Self::Human),
             1 => Some(Self::Car),
             2 => Some(Self::Bus),
@@ -667,9 +626,8 @@ impl Default for AITargetType {
         Self::Human
     }
 }
-
 #[repr(u8)]
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord)]
 pub enum ControlMode {
     AttitudeMode = 0,
     WeakMode = 1,
@@ -678,8 +636,8 @@ pub enum ControlMode {
     MotorClose = 4,
 }
 impl ControlMode {
-    pub const fn from_u8(v: u8) -> Option<Self> {
-        match v {
+    pub const fn from_u8(val: u8) -> Option<Self> {
+        match val {
             0 => Some(Self::AttitudeMode),
             1 => Some(Self::WeakMode),
             2 => Some(Self::MiddleMode),
@@ -697,17 +655,16 @@ impl Default for ControlMode {
         Self::AttitudeMode
     }
 }
-
 #[repr(u8)]
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord)]
 pub enum FileType {
     Picture = 0,
     TempRawFile = 1,
     RecordVideo = 2,
 }
 impl FileType {
-    pub const fn from_u8(v: u8) -> Option<Self> {
-        match v {
+    pub const fn from_u8(val: u8) -> Option<Self> {
+        match val {
             0 => Some(Self::Picture),
             1 => Some(Self::TempRawFile),
             2 => Some(Self::RecordVideo),
@@ -723,17 +680,16 @@ impl Default for FileType {
         Self::Picture
     }
 }
-
 #[repr(u8)]
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord)]
 pub enum FileNameType {
     Reserve = 0,
     Index = 1,
     TimeStamp = 2,
 }
 impl FileNameType {
-    pub const fn from_u8(v: u8) -> Option<Self> {
-        match v {
+    pub const fn from_u8(val: u8) -> Option<Self> {
+        match val {
             0 => Some(Self::Reserve),
             1 => Some(Self::Index),
             2 => Some(Self::TimeStamp),
@@ -749,17 +705,16 @@ impl Default for FileNameType {
         Self::Reserve
     }
 }
-
 #[repr(u8)]
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord)]
 pub enum ThermalThresholdPrecision {
     MaxAccurate = 1,
     MidAccurate = 2,
     MinAccurate = 3,
 }
 impl ThermalThresholdPrecision {
-    pub const fn from_u8(v: u8) -> Option<Self> {
-        match v {
+    pub const fn from_u8(val: u8) -> Option<Self> {
+        match val {
             1 => Some(Self::MaxAccurate),
             2 => Some(Self::MidAccurate),
             3 => Some(Self::MinAccurate),
@@ -775,16 +730,15 @@ impl Default for ThermalThresholdPrecision {
         Self::MaxAccurate
     }
 }
-
 #[repr(u8)]
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord)]
 pub enum SingleAxisControl {
     YawControl = 0,
     PitchControl = 1,
 }
 impl SingleAxisControl {
-    pub const fn from_u8(v: u8) -> Option<Self> {
-        match v {
+    pub const fn from_u8(val: u8) -> Option<Self> {
+        match val {
             0 => Some(Self::YawControl),
             1 => Some(Self::PitchControl),
             _ => None,
@@ -799,8 +753,7 @@ impl Default for SingleAxisControl {
         Self::YawControl
     }
 }
-
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, Copy, PartialEq)]
 pub struct Frame {
     pub ctrl: CtrlByte,
     pub seq: u16,
@@ -809,258 +762,107 @@ pub struct Frame {
     pub data_len: u16,
 }
 impl Frame {
-    pub fn new(cmd: u8, is_response: bool) -> Self {
-        Self {
-            ctrl: if is_response {
-                CtrlByte::response()
-            } else {
-                CtrlByte::request()
-            },
-            seq: 0,
-            cmd,
-            data: [0; MAX_MESSAGE_SIZE],
-            data_len: 0,
+    pub fn encode(&self, buf: &mut [u8]) -> Result<usize, EncodeError> {
+        let total_len = 10 + self.data_len as usize;
+        if buf.len() < total_len {
+            return Err(EncodeError::BufferTooSmall);
         }
+        buf[0..2].copy_from_slice(&if STX_LITTLE {
+            STX.to_le_bytes()
+        } else {
+            STX.to_be_bytes()
+        });
+        buf[2] = self.ctrl.to_u8();
+        buf[3..5].copy_from_slice(&self.data_len.to_le_bytes());
+        buf[5..7].copy_from_slice(&self.seq.to_le_bytes());
+        buf[7] = self.cmd;
+        buf[8..8 + self.data_len as usize].copy_from_slice(&self.data[..self.data_len as usize]);
+        let crc = crc16_calc(&buf[0..8 + self.data_len as usize], 0);
+        buf[8 + self.data_len as usize..total_len].copy_from_slice(&crc.to_le_bytes());
+        Ok(total_len)
     }
-    pub fn data_slice(&self) -> &[u8] {
-        &self.data[..self.data_len as usize]
-    }
-}
-impl Default for Frame {
-    fn default() -> Self {
-        Self::new(0, false)
+    pub fn decode(buf: &[u8]) -> Result<Self, DecodeError> {
+        if buf.len() < 10 {
+            return Err(DecodeError::FrameTooShort);
+        }
+        let stx = if STX_LITTLE {
+            u16::from_le_bytes(buf[0..2].try_into().unwrap())
+        } else {
+            u16::from_be_bytes(buf[0..2].try_into().unwrap())
+        };
+        if stx != STX {
+            return Err(DecodeError::InvalidStx);
+        }
+        let data_len = u16::from_le_bytes(buf[3..5].try_into().unwrap()) as usize;
+        let expected_len = 10 + data_len;
+        if buf.len() < expected_len {
+            return Err(DecodeError::FrameIncomplete);
+        }
+        let crc_recv = u16::from_le_bytes(buf[expected_len - 2..expected_len].try_into().unwrap());
+        if crc_recv != crc16_calc(&buf[..expected_len - 2], 0) {
+            return Err(DecodeError::CrcMismatch);
+        }
+        let mut data = [0u8; MAX_MESSAGE_SIZE];
+        data[..data_len].copy_from_slice(&buf[8..8 + data_len]);
+        Ok(Self {
+            ctrl: CtrlByte::from_u8(buf[2]),
+            seq: u16::from_le_bytes(buf[5..7].try_into().unwrap()),
+            cmd: buf[7],
+            data,
+            data_len: data_len as u16,
+        })
     }
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-enum State {
-    Stx1,
-    Stx2(u8),
-    Ctrl,
-    Len1,
-    Len2(u8),
-    Seq1,
-    Seq2(u8),
-    Cmd,
-    Data(usize),
-    Crc1,
-    Crc2(u8),
-}
-
-#[derive(Debug, Clone)]
-pub struct FrameParser {
-    state: State,
-    buf: [u8; MAX_FRAME_SIZE],
-    idx: usize,
-    data_len: u16,
-}
-impl FrameParser {
-    pub fn new() -> Self {
-        Self {
-            state: State::Stx1,
-            buf: [0; MAX_FRAME_SIZE],
-            idx: 0,
-            data_len: 0,
-        }
-    }
-    pub fn reset(&mut self) {
-        self.state = State::Stx1;
-        self.idx = 0;
-        self.data_len = 0;
-    }
-    pub fn feed(&mut self, b: u8) -> Result<Option<Frame>, DecodeError> {
-        let stx_lo = (STX & 0xFF) as u8;
-        let stx_hi = (STX >> 8) as u8;
-        match self.state {
-            State::Stx1 => {
-                if b == stx_lo {
-                    self.buf[0] = b;
-                    self.idx = 1;
-                    self.state = State::Stx2(b);
-                }
-                Ok(None)
-            }
-            State::Stx2(_) => {
-                if b == stx_hi {
-                    self.buf[1] = b;
-                    self.idx = 2;
-                    self.state = State::Ctrl;
-                } else if b == stx_lo {
-                    self.buf[0] = b;
-                    self.idx = 1;
-                    self.state = State::Stx2(b);
-                } else {
-                    self.reset();
-                }
-                Ok(None)
-            }
-            State::Ctrl => {
-                self.buf[self.idx] = b;
-                self.idx += 1;
-                self.state = State::Len1;
-                Ok(None)
-            }
-            State::Len1 => {
-                self.buf[self.idx] = b;
-                self.idx += 1;
-                self.state = State::Len2(b);
-                Ok(None)
-            }
-            State::Len2(lo) => {
-                self.buf[self.idx] = b;
-                self.idx += 1;
-                self.data_len = u16::from_le_bytes([lo, b]);
-                self.state = State::Seq1;
-                Ok(None)
-            }
-            State::Seq1 => {
-                self.buf[self.idx] = b;
-                self.idx += 1;
-                self.state = State::Seq2(b);
-                Ok(None)
-            }
-            State::Seq2(_) => {
-                self.buf[self.idx] = b;
-                self.idx += 1;
-                self.state = State::Cmd;
-                Ok(None)
-            }
-            State::Cmd => {
-                self.buf[self.idx] = b;
-                self.idx += 1;
-                self.state = if self.data_len == 0 {
-                    State::Crc1
-                } else {
-                    State::Data(0)
-                };
-                Ok(None)
-            }
-            State::Data(cnt) => {
-                self.buf[self.idx] = b;
-                self.idx += 1;
-                if cnt + 1 >= self.data_len as usize {
-                    self.state = State::Crc1;
-                } else {
-                    self.state = State::Data(cnt + 1);
-                }
-                Ok(None)
-            }
-            State::Crc1 => {
-                self.buf[self.idx] = b;
-                self.idx += 1;
-                self.state = State::Crc2(b);
-                Ok(None)
-            }
-            State::Crc2(_) => {
-                self.buf[self.idx] = b;
-                self.idx += 1;
-                let frame_data = &self.buf[..self.idx - 2];
-                let crc_recv = u16::from_le_bytes([self.buf[self.idx - 2], b]);
-                let crc_calc = crc16_calc(frame_data);
-                if crc_recv != crc_calc {
-                    self.reset();
-                    return Err(DecodeError::CrcMismatch);
-                }
-                let mut frame = Frame::default();
-                frame.ctrl = CtrlByte::from_u8(self.buf[2]);
-                frame.seq = u16::from_le_bytes([self.buf[5], self.buf[6]]);
-                frame.cmd = self.buf[7];
-                frame.data_len = self.data_len;
-                frame.data[..self.data_len as usize]
-                    .copy_from_slice(&self.buf[8..8 + self.data_len as usize]);
-                self.reset();
-                Ok(Some(frame))
-            }
-        }
-    }
-}
-impl Default for FrameParser {
-    fn default() -> Self {
-        Self::new()
-    }
-}
-
-/// TCP heartbeat keepalive
-/// CMD_ID: 0x00 | REQUEST
-#[derive(Debug, Clone, PartialEq)]
-pub struct TcpHeartbeat {
-    _phantom: core::marker::PhantomData<()>,
-}
+// ============================================================================
+// Message Structures
+// ============================================================================
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct TcpHeartbeat {}
 impl TcpHeartbeat {
     pub const CMD_ID: u8 = 0x00;
     pub const IS_REQUEST: bool = true;
-    pub fn new() -> Self {
-        Self {
-            _phantom: core::marker::PhantomData,
-        }
-    }
     pub fn encode(&self, buf: &mut [u8]) -> Result<usize, EncodeError> {
         let mut idx = 0;
         Ok(idx)
     }
     pub fn decode(data: &[u8]) -> Result<Self, DecodeError> {
-        Ok(Self {
-            _phantom: core::marker::PhantomData,
-        })
+        let mut idx = 0;
+        Ok(Self {})
     }
 }
 impl Default for TcpHeartbeat {
     fn default() -> Self {
-        Self::new()
+        Self {}
     }
 }
-
-/// Request firmware version
-/// CMD_ID: 0x01 | REQUEST
-#[derive(Debug, Clone, PartialEq)]
-pub struct FirmwareVersionRequest {
-    _phantom: core::marker::PhantomData<()>,
-}
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct FirmwareVersionRequest {}
 impl FirmwareVersionRequest {
     pub const CMD_ID: u8 = 0x01;
     pub const IS_REQUEST: bool = true;
-    pub fn new() -> Self {
-        Self {
-            _phantom: core::marker::PhantomData,
-        }
-    }
     pub fn encode(&self, buf: &mut [u8]) -> Result<usize, EncodeError> {
         let mut idx = 0;
         Ok(idx)
     }
     pub fn decode(data: &[u8]) -> Result<Self, DecodeError> {
-        Ok(Self {
-            _phantom: core::marker::PhantomData,
-        })
+        let mut idx = 0;
+        Ok(Self {})
     }
 }
 impl Default for FirmwareVersionRequest {
     fn default() -> Self {
-        Self::new()
+        Self {}
     }
 }
-
-/// Firmware version response
-/// CMD_ID: 0x01 | RESPONSE
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, Copy, PartialEq)]
 pub struct FirmwareVersionResponse {
-    /// Camera firmware version (ignore highest byte)
     pub camera_firmware_ver: u32,
-    /// Gimbal firmware version
     pub gimbal_firmware_ver: u32,
-    /// Zoom module firmware version
-    pub zoom_firmware_ver: u32,
 }
 impl FirmwareVersionResponse {
     pub const CMD_ID: u8 = 0x01;
     pub const IS_REQUEST: bool = false;
-    pub fn new(camera_firmware_ver: u32, gimbal_firmware_ver: u32, zoom_firmware_ver: u32) -> Self {
-        Self {
-            camera_firmware_ver,
-            gimbal_firmware_ver,
-            zoom_firmware_ver,
-        }
-    }
     pub fn encode(&self, buf: &mut [u8]) -> Result<usize, EncodeError> {
         let mut idx = 0;
         if idx + 4 > buf.len() {
@@ -1072,11 +874,6 @@ impl FirmwareVersionResponse {
             return Err(EncodeError::BufferTooSmall);
         }
         buf[idx..idx + 4].copy_from_slice(&self.gimbal_firmware_ver.to_le_bytes());
-        idx += 4;
-        if idx + 4 > buf.len() {
-            return Err(EncodeError::BufferTooSmall);
-        }
-        buf[idx..idx + 4].copy_from_slice(&self.zoom_firmware_ver.to_le_bytes());
         idx += 4;
         Ok(idx)
     }
@@ -1100,71 +897,46 @@ impl FirmwareVersionResponse {
                 .map_err(|_| DecodeError::ConversionError)?,
         );
         idx += 4;
-        if data.len() < idx + 4 {
-            return Err(DecodeError::NotEnoughBytes);
-        }
-        let zoom_firmware_ver = u32::from_le_bytes(
-            data[idx..idx + 4]
-                .try_into()
-                .map_err(|_| DecodeError::ConversionError)?,
-        );
-        idx += 4;
         Ok(Self {
             camera_firmware_ver,
             gimbal_firmware_ver,
-            zoom_firmware_ver,
         })
     }
 }
 impl Default for FirmwareVersionResponse {
     fn default() -> Self {
-        Self::new(0, 0, 0)
+        Self {
+            camera_firmware_ver: 0,
+            gimbal_firmware_ver: 0,
+        }
     }
 }
-
-/// Get hardware ID
-/// CMD_ID: 0x02 | REQUEST
-#[derive(Debug, Clone, PartialEq)]
-pub struct HardwareIdRequest {
-    _phantom: core::marker::PhantomData<()>,
-}
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct HardwareIdRequest {}
 impl HardwareIdRequest {
     pub const CMD_ID: u8 = 0x02;
     pub const IS_REQUEST: bool = true;
-    pub fn new() -> Self {
-        Self {
-            _phantom: core::marker::PhantomData,
-        }
-    }
     pub fn encode(&self, buf: &mut [u8]) -> Result<usize, EncodeError> {
         let mut idx = 0;
         Ok(idx)
     }
     pub fn decode(data: &[u8]) -> Result<Self, DecodeError> {
-        Ok(Self {
-            _phantom: core::marker::PhantomData,
-        })
+        let mut idx = 0;
+        Ok(Self {})
     }
 }
 impl Default for HardwareIdRequest {
     fn default() -> Self {
-        Self::new()
+        Self {}
     }
 }
-
-/// Hardware ID response
-/// CMD_ID: 0x02 | RESPONSE
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, Copy, PartialEq)]
 pub struct HardwareIdResponse {
-    /// 10-digit hardware ID string
     pub hardware_id: [u8; 12],
 }
 impl HardwareIdResponse {
     pub const CMD_ID: u8 = 0x02;
     pub const IS_REQUEST: bool = false;
-    pub fn new(hardware_id: [u8; 12]) -> Self {
-        Self { hardware_id }
-    }
     pub fn encode(&self, buf: &mut [u8]) -> Result<usize, EncodeError> {
         let mut idx = 0;
         if idx + 12 > buf.len() {
@@ -1179,39 +951,29 @@ impl HardwareIdResponse {
         if data.len() < idx + 12 {
             return Err(DecodeError::NotEnoughBytes);
         }
-        let mut hardware_id = [0u8; 12];
-        hardware_id.copy_from_slice(&data[idx..idx + 12]);
+        let hardware_id: [u8; 12] = data[idx..idx + 12]
+            .try_into()
+            .map_err(|_| DecodeError::ConversionError)?;
         idx += 12;
         Ok(Self { hardware_id })
     }
 }
 impl Default for HardwareIdResponse {
     fn default() -> Self {
-        Self::new([0u8; 12])
+        Self {
+            hardware_id: [0u8; 12],
+        }
     }
 }
-
-/// Trigger auto focus
-/// CMD_ID: 0x04 | REQUEST
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, Copy, PartialEq)]
 pub struct AutoFocusRequest {
-    /// 1: Trigger single autofocus
     pub auto_focus: u8,
-    /// X coordinate (video stream width)
     pub touch_x: u16,
-    /// Y coordinate (video stream height)
     pub touch_y: u16,
 }
 impl AutoFocusRequest {
     pub const CMD_ID: u8 = 0x04;
     pub const IS_REQUEST: bool = true;
-    pub fn new(auto_focus: u8, touch_x: u16, touch_y: u16) -> Self {
-        Self {
-            auto_focus,
-            touch_x,
-            touch_y,
-        }
-    }
     pub fn encode(&self, buf: &mut [u8]) -> Result<usize, EncodeError> {
         let mut idx = 0;
         if idx + 1 > buf.len() {
@@ -1269,23 +1031,20 @@ impl AutoFocusRequest {
 }
 impl Default for AutoFocusRequest {
     fn default() -> Self {
-        Self::new(0, 0, 0)
+        Self {
+            auto_focus: 0,
+            touch_x: 0,
+            touch_y: 0,
+        }
     }
 }
-
-/// Auto focus response
-/// CMD_ID: 0x04 | RESPONSE
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, Copy, PartialEq)]
 pub struct AutoFocusResponse {
-    /// Success or Error
     pub status: BooleanStatus,
 }
 impl AutoFocusResponse {
     pub const CMD_ID: u8 = 0x04;
     pub const IS_REQUEST: bool = false;
-    pub fn new(status: BooleanStatus) -> Self {
-        Self { status }
-    }
     pub fn encode(&self, buf: &mut [u8]) -> Result<usize, EncodeError> {
         let mut idx = 0;
         if idx >= buf.len() {
@@ -1307,23 +1066,18 @@ impl AutoFocusResponse {
 }
 impl Default for AutoFocusResponse {
     fn default() -> Self {
-        Self::new(BooleanStatus::default())
+        Self {
+            status: BooleanStatus::default(),
+        }
     }
 }
-
-/// Manual zoom control
-/// CMD_ID: 0x05 | REQUEST
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, Copy, PartialEq)]
 pub struct ManualZoomRequest {
-    /// 1: Zoom in, 0: Stop, -1: Zoom out
     pub zoom: i8,
 }
 impl ManualZoomRequest {
     pub const CMD_ID: u8 = 0x05;
     pub const IS_REQUEST: bool = true;
-    pub fn new(zoom: i8) -> Self {
-        Self { zoom }
-    }
     pub fn encode(&self, buf: &mut [u8]) -> Result<usize, EncodeError> {
         let mut idx = 0;
         if idx + 1 > buf.len() {
@@ -1349,23 +1103,16 @@ impl ManualZoomRequest {
 }
 impl Default for ManualZoomRequest {
     fn default() -> Self {
-        Self::new(0)
+        Self { zoom: 0 }
     }
 }
-
-/// Manual zoom response
-/// CMD_ID: 0x05 | RESPONSE
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, Copy, PartialEq)]
 pub struct ManualZoomResponse {
-    /// Current zoom level * 10
     pub zoom_multiple: u16,
 }
 impl ManualZoomResponse {
     pub const CMD_ID: u8 = 0x05;
     pub const IS_REQUEST: bool = false;
-    pub fn new(zoom_multiple: u16) -> Self {
-        Self { zoom_multiple }
-    }
     pub fn encode(&self, buf: &mut [u8]) -> Result<usize, EncodeError> {
         let mut idx = 0;
         if idx + 2 > buf.len() {
@@ -1391,23 +1138,16 @@ impl ManualZoomResponse {
 }
 impl Default for ManualZoomResponse {
     fn default() -> Self {
-        Self::new(0)
+        Self { zoom_multiple: 0 }
     }
 }
-
-/// Manual focus control
-/// CMD_ID: 0x06 | REQUEST
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, Copy, PartialEq)]
 pub struct ManualFocusRequest {
-    /// 1: Far, 0: Stop, -1: Near
     pub focus: i8,
 }
 impl ManualFocusRequest {
     pub const CMD_ID: u8 = 0x06;
     pub const IS_REQUEST: bool = true;
-    pub fn new(focus: i8) -> Self {
-        Self { focus }
-    }
     pub fn encode(&self, buf: &mut [u8]) -> Result<usize, EncodeError> {
         let mut idx = 0;
         if idx + 1 > buf.len() {
@@ -1433,23 +1173,16 @@ impl ManualFocusRequest {
 }
 impl Default for ManualFocusRequest {
     fn default() -> Self {
-        Self::new(0)
+        Self { focus: 0 }
     }
 }
-
-/// Manual focus response
-/// CMD_ID: 0x06 | RESPONSE
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, Copy, PartialEq)]
 pub struct ManualFocusResponse {
-    /// Success or Error
     pub status: BooleanStatus,
 }
 impl ManualFocusResponse {
     pub const CMD_ID: u8 = 0x06;
     pub const IS_REQUEST: bool = false;
-    pub fn new(status: BooleanStatus) -> Self {
-        Self { status }
-    }
     pub fn encode(&self, buf: &mut [u8]) -> Result<usize, EncodeError> {
         let mut idx = 0;
         if idx >= buf.len() {
@@ -1471,25 +1204,19 @@ impl ManualFocusResponse {
 }
 impl Default for ManualFocusResponse {
     fn default() -> Self {
-        Self::new(BooleanStatus::default())
+        Self {
+            status: BooleanStatus::default(),
+        }
     }
 }
-
-/// Control gimbal rotation
-/// CMD_ID: 0x07 | REQUEST
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, Copy, PartialEq)]
 pub struct GimbalRotationRequest {
-    /// Yaw speed -100 to +100
     pub yaw: i8,
-    /// Pitch speed -100 to +100
     pub pitch: i8,
 }
 impl GimbalRotationRequest {
     pub const CMD_ID: u8 = 0x07;
     pub const IS_REQUEST: bool = true;
-    pub fn new(yaw: i8, pitch: i8) -> Self {
-        Self { yaw, pitch }
-    }
     pub fn encode(&self, buf: &mut [u8]) -> Result<usize, EncodeError> {
         let mut idx = 0;
         if idx + 1 > buf.len() {
@@ -1529,23 +1256,16 @@ impl GimbalRotationRequest {
 }
 impl Default for GimbalRotationRequest {
     fn default() -> Self {
-        Self::new(0, 0)
+        Self { yaw: 0, pitch: 0 }
     }
 }
-
-/// Gimbal rotation response
-/// CMD_ID: 0x07 | RESPONSE
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, Copy, PartialEq)]
 pub struct GimbalRotationResponse {
-    /// Success or Error
     pub status: BooleanStatus,
 }
 impl GimbalRotationResponse {
     pub const CMD_ID: u8 = 0x07;
     pub const IS_REQUEST: bool = false;
-    pub fn new(status: BooleanStatus) -> Self {
-        Self { status }
-    }
     pub fn encode(&self, buf: &mut [u8]) -> Result<usize, EncodeError> {
         let mut idx = 0;
         if idx >= buf.len() {
@@ -1567,23 +1287,18 @@ impl GimbalRotationResponse {
 }
 impl Default for GimbalRotationResponse {
     fn default() -> Self {
-        Self::new(BooleanStatus::default())
+        Self {
+            status: BooleanStatus::default(),
+        }
     }
 }
-
-/// Center gimbal
-/// CMD_ID: 0x08 | REQUEST
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, Copy, PartialEq)]
 pub struct CenterGimbalRequest {
-    /// Center position mode
     pub center_pos: CenterPosition,
 }
 impl CenterGimbalRequest {
     pub const CMD_ID: u8 = 0x08;
     pub const IS_REQUEST: bool = true;
-    pub fn new(center_pos: CenterPosition) -> Self {
-        Self { center_pos }
-    }
     pub fn encode(&self, buf: &mut [u8]) -> Result<usize, EncodeError> {
         let mut idx = 0;
         if idx >= buf.len() {
@@ -1605,23 +1320,18 @@ impl CenterGimbalRequest {
 }
 impl Default for CenterGimbalRequest {
     fn default() -> Self {
-        Self::new(CenterPosition::default())
+        Self {
+            center_pos: CenterPosition::default(),
+        }
     }
 }
-
-/// Center response
-/// CMD_ID: 0x08 | RESPONSE
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, Copy, PartialEq)]
 pub struct CenterGimbalResponse {
-    /// Success or Error
     pub status: BooleanStatus,
 }
 impl CenterGimbalResponse {
     pub const CMD_ID: u8 = 0x08;
     pub const IS_REQUEST: bool = false;
-    pub fn new(status: BooleanStatus) -> Self {
-        Self { status }
-    }
     pub fn encode(&self, buf: &mut [u8]) -> Result<usize, EncodeError> {
         let mut idx = 0;
         if idx >= buf.len() {
@@ -1643,83 +1353,43 @@ impl CenterGimbalResponse {
 }
 impl Default for CenterGimbalResponse {
     fn default() -> Self {
-        Self::new(BooleanStatus::default())
+        Self {
+            status: BooleanStatus::default(),
+        }
     }
 }
-
-/// Request camera system info
-/// CMD_ID: 0x0A | REQUEST
-#[derive(Debug, Clone, PartialEq)]
-pub struct CameraSystemInfoRequest {
-    _phantom: core::marker::PhantomData<()>,
-}
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct CameraSystemInfoRequest {}
 impl CameraSystemInfoRequest {
     pub const CMD_ID: u8 = 0x0A;
     pub const IS_REQUEST: bool = true;
-    pub fn new() -> Self {
-        Self {
-            _phantom: core::marker::PhantomData,
-        }
-    }
     pub fn encode(&self, buf: &mut [u8]) -> Result<usize, EncodeError> {
         let mut idx = 0;
         Ok(idx)
     }
     pub fn decode(data: &[u8]) -> Result<Self, DecodeError> {
-        Ok(Self {
-            _phantom: core::marker::PhantomData,
-        })
+        let mut idx = 0;
+        Ok(Self {})
     }
 }
 impl Default for CameraSystemInfoRequest {
     fn default() -> Self {
-        Self::new()
+        Self {}
     }
 }
-
-/// Camera system info
-/// CMD_ID: 0x0A | RESPONSE
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, Copy, PartialEq)]
 pub struct CameraSystemInfoResponse {
     pub reserved1: u8,
-    /// HDR status
     pub hdr_status: BooleanOnOff,
     pub reserved2: u8,
-    /// Recording status
     pub record_status: RecordingStatus,
-    /// Current gimbal mode
     pub gimbal_motion_mode: GimbalMode,
-    /// Mounting direction
     pub gimbal_mounting_dir: GimbalMountingDir,
-    /// Video output status
     pub video_output: VideoOutput,
-    /// Zoom linkage status
-    pub zoom_linkage: BooleanOnOff,
 }
 impl CameraSystemInfoResponse {
     pub const CMD_ID: u8 = 0x0A;
     pub const IS_REQUEST: bool = false;
-    pub fn new(
-        reserved1: u8,
-        hdr_status: BooleanOnOff,
-        reserved2: u8,
-        record_status: RecordingStatus,
-        gimbal_motion_mode: GimbalMode,
-        gimbal_mounting_dir: GimbalMountingDir,
-        video_output: VideoOutput,
-        zoom_linkage: BooleanOnOff,
-    ) -> Self {
-        Self {
-            reserved1,
-            hdr_status,
-            reserved2,
-            record_status,
-            gimbal_motion_mode,
-            gimbal_mounting_dir,
-            video_output,
-            zoom_linkage,
-        }
-    }
     pub fn encode(&self, buf: &mut [u8]) -> Result<usize, EncodeError> {
         let mut idx = 0;
         if idx + 1 > buf.len() {
@@ -1756,11 +1426,6 @@ impl CameraSystemInfoResponse {
             return Err(EncodeError::BufferTooSmall);
         }
         buf[idx] = self.video_output as u8;
-        idx += 1;
-        if idx >= buf.len() {
-            return Err(EncodeError::BufferTooSmall);
-        }
-        buf[idx] = self.zoom_linkage as u8;
         idx += 1;
         Ok(idx)
     }
@@ -1812,11 +1477,6 @@ impl CameraSystemInfoResponse {
         }
         let video_output = VideoOutput::from_u8(data[idx]).ok_or(DecodeError::InvalidEnumValue)?;
         idx += 1;
-        if idx >= data.len() {
-            return Err(DecodeError::NotEnoughBytes);
-        }
-        let zoom_linkage = BooleanOnOff::from_u8(data[idx]).ok_or(DecodeError::InvalidEnumValue)?;
-        idx += 1;
         Ok(Self {
             reserved1,
             hdr_status,
@@ -1825,38 +1485,29 @@ impl CameraSystemInfoResponse {
             gimbal_motion_mode,
             gimbal_mounting_dir,
             video_output,
-            zoom_linkage,
         })
     }
 }
 impl Default for CameraSystemInfoResponse {
     fn default() -> Self {
-        Self::new(
-            0,
-            BooleanOnOff::default(),
-            0,
-            RecordingStatus::default(),
-            GimbalMode::default(),
-            GimbalMountingDir::default(),
-            VideoOutput::default(),
-            BooleanOnOff::default(),
-        )
+        Self {
+            reserved1: 0,
+            hdr_status: BooleanOnOff::default(),
+            reserved2: 0,
+            record_status: RecordingStatus::default(),
+            gimbal_motion_mode: GimbalMode::default(),
+            gimbal_mounting_dir: GimbalMountingDir::default(),
+            video_output: VideoOutput::default(),
+        }
     }
 }
-
-/// Function feedback (sent by camera)
-/// CMD_ID: 0x0B | RESPONSE
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, Copy, PartialEq)]
 pub struct FunctionFeedback {
-    /// Feedback type
     pub info_type: FeedbackInfoType,
 }
 impl FunctionFeedback {
     pub const CMD_ID: u8 = 0x0B;
     pub const IS_REQUEST: bool = false;
-    pub fn new(info_type: FeedbackInfoType) -> Self {
-        Self { info_type }
-    }
     pub fn encode(&self, buf: &mut [u8]) -> Result<usize, EncodeError> {
         let mut idx = 0;
         if idx >= buf.len() {
@@ -1879,23 +1530,18 @@ impl FunctionFeedback {
 }
 impl Default for FunctionFeedback {
     fn default() -> Self {
-        Self::new(FeedbackInfoType::default())
+        Self {
+            info_type: FeedbackInfoType::default(),
+        }
     }
 }
-
-/// Photo/video/mode control
-/// CMD_ID: 0x0C | REQUEST
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, Copy, PartialEq)]
 pub struct FunctionControl {
-    /// Function to execute
     pub func_type: FunctionType,
 }
 impl FunctionControl {
     pub const CMD_ID: u8 = 0x0C;
     pub const IS_REQUEST: bool = true;
-    pub fn new(func_type: FunctionType) -> Self {
-        Self { func_type }
-    }
     pub fn encode(&self, buf: &mut [u8]) -> Result<usize, EncodeError> {
         let mut idx = 0;
         if idx >= buf.len() {
@@ -1917,77 +1563,42 @@ impl FunctionControl {
 }
 impl Default for FunctionControl {
     fn default() -> Self {
-        Self::new(FunctionType::default())
+        Self {
+            func_type: FunctionType::default(),
+        }
     }
 }
-
-/// Request gimbal attitude
-/// CMD_ID: 0x0D | REQUEST
-#[derive(Debug, Clone, PartialEq)]
-pub struct GimbalAttitudeRequest {
-    _phantom: core::marker::PhantomData<()>,
-}
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct GimbalAttitudeRequest {}
 impl GimbalAttitudeRequest {
     pub const CMD_ID: u8 = 0x0D;
     pub const IS_REQUEST: bool = true;
-    pub fn new() -> Self {
-        Self {
-            _phantom: core::marker::PhantomData,
-        }
-    }
     pub fn encode(&self, buf: &mut [u8]) -> Result<usize, EncodeError> {
         let mut idx = 0;
         Ok(idx)
     }
     pub fn decode(data: &[u8]) -> Result<Self, DecodeError> {
-        Ok(Self {
-            _phantom: core::marker::PhantomData,
-        })
+        let mut idx = 0;
+        Ok(Self {})
     }
 }
 impl Default for GimbalAttitudeRequest {
     fn default() -> Self {
-        Self::new()
+        Self {}
     }
 }
-
-/// Gimbal attitude data
-/// CMD_ID: 0x0D | RESPONSE
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, Copy, PartialEq)]
 pub struct GimbalAttitudeResponse {
-    /// Yaw angle * 10 (degrees)
     pub yaw: i16,
-    /// Pitch angle * 10 (degrees)
     pub pitch: i16,
-    /// Roll angle * 10 (degrees)
     pub roll: i16,
-    /// Yaw angular velocity
     pub yaw_velocity: i16,
-    /// Pitch angular velocity
     pub pitch_velocity: i16,
-    /// Roll angular velocity
     pub roll_velocity: i16,
 }
 impl GimbalAttitudeResponse {
     pub const CMD_ID: u8 = 0x0D;
     pub const IS_REQUEST: bool = false;
-    pub fn new(
-        yaw: i16,
-        pitch: i16,
-        roll: i16,
-        yaw_velocity: i16,
-        pitch_velocity: i16,
-        roll_velocity: i16,
-    ) -> Self {
-        Self {
-            yaw,
-            pitch,
-            roll,
-            yaw_velocity,
-            pitch_velocity,
-            roll_velocity,
-        }
-    }
     pub fn encode(&self, buf: &mut [u8]) -> Result<usize, EncodeError> {
         let mut idx = 0;
         if idx + 2 > buf.len() {
@@ -2090,25 +1701,24 @@ impl GimbalAttitudeResponse {
 }
 impl Default for GimbalAttitudeResponse {
     fn default() -> Self {
-        Self::new(0, 0, 0, 0, 0, 0)
+        Self {
+            yaw: 0,
+            pitch: 0,
+            roll: 0,
+            yaw_velocity: 0,
+            pitch_velocity: 0,
+            roll_velocity: 0,
+        }
     }
 }
-
-/// Set gimbal angles
-/// CMD_ID: 0x0E | REQUEST
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, Copy, PartialEq)]
 pub struct SetGimbalAttitudeRequest {
-    /// Target yaw * 10 (degrees)
     pub yaw: i16,
-    /// Target pitch * 10 (degrees)
     pub pitch: i16,
 }
 impl SetGimbalAttitudeRequest {
     pub const CMD_ID: u8 = 0x0E;
     pub const IS_REQUEST: bool = true;
-    pub fn new(yaw: i16, pitch: i16) -> Self {
-        Self { yaw, pitch }
-    }
     pub fn encode(&self, buf: &mut [u8]) -> Result<usize, EncodeError> {
         let mut idx = 0;
         if idx + 2 > buf.len() {
@@ -2148,27 +1758,18 @@ impl SetGimbalAttitudeRequest {
 }
 impl Default for SetGimbalAttitudeRequest {
     fn default() -> Self {
-        Self::new(0, 0)
+        Self { yaw: 0, pitch: 0 }
     }
 }
-
-/// Set attitude response
-/// CMD_ID: 0x0E | RESPONSE
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, Copy, PartialEq)]
 pub struct SetGimbalAttitudeResponse {
-    /// Current yaw * 10
     pub yaw: i16,
-    /// Current pitch * 10
     pub pitch: i16,
-    /// Current roll * 10
     pub roll: i16,
 }
 impl SetGimbalAttitudeResponse {
     pub const CMD_ID: u8 = 0x0E;
     pub const IS_REQUEST: bool = false;
-    pub fn new(yaw: i16, pitch: i16, roll: i16) -> Self {
-        Self { yaw, pitch, roll }
-    }
     pub fn encode(&self, buf: &mut [u8]) -> Result<usize, EncodeError> {
         let mut idx = 0;
         if idx + 2 > buf.len() {
@@ -2222,28 +1823,21 @@ impl SetGimbalAttitudeResponse {
 }
 impl Default for SetGimbalAttitudeResponse {
     fn default() -> Self {
-        Self::new(0, 0, 0)
+        Self {
+            yaw: 0,
+            pitch: 0,
+            roll: 0,
+        }
     }
 }
-
-/// Set absolute zoom level
-/// CMD_ID: 0x0F | REQUEST
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, Copy, PartialEq)]
 pub struct AbsoluteZoomRequest {
-    /// Integer part of zoom (1-30)
     pub zoom_int: u8,
-    /// Decimal part (0-9)
     pub zoom_float: u8,
 }
 impl AbsoluteZoomRequest {
     pub const CMD_ID: u8 = 0x0F;
     pub const IS_REQUEST: bool = true;
-    pub fn new(zoom_int: u8, zoom_float: u8) -> Self {
-        Self {
-            zoom_int,
-            zoom_float,
-        }
-    }
     pub fn encode(&self, buf: &mut [u8]) -> Result<usize, EncodeError> {
         let mut idx = 0;
         if idx + 1 > buf.len() {
@@ -2286,23 +1880,19 @@ impl AbsoluteZoomRequest {
 }
 impl Default for AbsoluteZoomRequest {
     fn default() -> Self {
-        Self::new(0, 0)
+        Self {
+            zoom_int: 0,
+            zoom_float: 0,
+        }
     }
 }
-
-/// Absolute zoom response
-/// CMD_ID: 0x0F | RESPONSE
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, Copy, PartialEq)]
 pub struct AbsoluteZoomResponse {
-    /// Success
     pub status: BooleanStatus,
 }
 impl AbsoluteZoomResponse {
     pub const CMD_ID: u8 = 0x0F;
     pub const IS_REQUEST: bool = false;
-    pub fn new(status: BooleanStatus) -> Self {
-        Self { status }
-    }
     pub fn encode(&self, buf: &mut [u8]) -> Result<usize, EncodeError> {
         let mut idx = 0;
         if idx >= buf.len() {
@@ -2324,53 +1914,37 @@ impl AbsoluteZoomResponse {
 }
 impl Default for AbsoluteZoomResponse {
     fn default() -> Self {
-        Self::new(BooleanStatus::default())
+        Self {
+            status: BooleanStatus::default(),
+        }
     }
 }
-
-/// Request video stitching mode
-/// CMD_ID: 0x10 | REQUEST
-#[derive(Debug, Clone, PartialEq)]
-pub struct VideoStitchingModeRequest {
-    _phantom: core::marker::PhantomData<()>,
-}
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct VideoStitchingModeRequest {}
 impl VideoStitchingModeRequest {
     pub const CMD_ID: u8 = 0x10;
     pub const IS_REQUEST: bool = true;
-    pub fn new() -> Self {
-        Self {
-            _phantom: core::marker::PhantomData,
-        }
-    }
     pub fn encode(&self, buf: &mut [u8]) -> Result<usize, EncodeError> {
         let mut idx = 0;
         Ok(idx)
     }
     pub fn decode(data: &[u8]) -> Result<Self, DecodeError> {
-        Ok(Self {
-            _phantom: core::marker::PhantomData,
-        })
+        let mut idx = 0;
+        Ok(Self {})
     }
 }
 impl Default for VideoStitchingModeRequest {
     fn default() -> Self {
-        Self::new()
+        Self {}
     }
 }
-
-/// Video stitching mode
-/// CMD_ID: 0x10 | RESPONSE
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, Copy, PartialEq)]
 pub struct VideoStitchingModeResponse {
-    /// 0-8: various stitching/non-stitching modes
     pub vdisp_mode: u8,
 }
 impl VideoStitchingModeResponse {
     pub const CMD_ID: u8 = 0x10;
     pub const IS_REQUEST: bool = false;
-    pub fn new(vdisp_mode: u8) -> Self {
-        Self { vdisp_mode }
-    }
     pub fn encode(&self, buf: &mut [u8]) -> Result<usize, EncodeError> {
         let mut idx = 0;
         if idx + 1 > buf.len() {
@@ -2396,23 +1970,16 @@ impl VideoStitchingModeResponse {
 }
 impl Default for VideoStitchingModeResponse {
     fn default() -> Self {
-        Self::new(0)
+        Self { vdisp_mode: 0 }
     }
 }
-
-/// Set video stitching mode
-/// CMD_ID: 0x11 | REQUEST
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, Copy, PartialEq)]
 pub struct SetVideoStitchingModeRequest {
-    /// 0-8: stitching mode selection
     pub vdisp_mode: u8,
 }
 impl SetVideoStitchingModeRequest {
     pub const CMD_ID: u8 = 0x11;
     pub const IS_REQUEST: bool = true;
-    pub fn new(vdisp_mode: u8) -> Self {
-        Self { vdisp_mode }
-    }
     pub fn encode(&self, buf: &mut [u8]) -> Result<usize, EncodeError> {
         let mut idx = 0;
         if idx + 1 > buf.len() {
@@ -2438,23 +2005,16 @@ impl SetVideoStitchingModeRequest {
 }
 impl Default for SetVideoStitchingModeRequest {
     fn default() -> Self {
-        Self::new(0)
+        Self { vdisp_mode: 0 }
     }
 }
-
-/// Set mode response
-/// CMD_ID: 0x11 | RESPONSE
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, Copy, PartialEq)]
 pub struct SetVideoStitchingModeResponse {
-    /// Confirmed mode
     pub vdisp_mode: u8,
 }
 impl SetVideoStitchingModeResponse {
     pub const CMD_ID: u8 = 0x11;
     pub const IS_REQUEST: bool = false;
-    pub fn new(vdisp_mode: u8) -> Self {
-        Self { vdisp_mode }
-    }
     pub fn encode(&self, buf: &mut [u8]) -> Result<usize, EncodeError> {
         let mut idx = 0;
         if idx + 1 > buf.len() {
@@ -2480,31 +2040,18 @@ impl SetVideoStitchingModeResponse {
 }
 impl Default for SetVideoStitchingModeResponse {
     fn default() -> Self {
-        Self::new(0)
+        Self { vdisp_mode: 0 }
     }
 }
-
-/// Get temperature at point
-/// CMD_ID: 0x12 | REQUEST
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, Copy, PartialEq)]
 pub struct GetTemperatureAtPointRequest {
-    /// X coordinate
     pub x: u16,
-    /// Y coordinate
     pub y: u16,
-    /// Measurement mode
     pub get_temp_flag: TempMeasurementFlag,
 }
 impl GetTemperatureAtPointRequest {
     pub const CMD_ID: u8 = 0x12;
     pub const IS_REQUEST: bool = true;
-    pub fn new(x: u16, y: u16, get_temp_flag: TempMeasurementFlag) -> Self {
-        Self {
-            x,
-            y,
-            get_temp_flag,
-        }
-    }
     pub fn encode(&self, buf: &mut [u8]) -> Result<usize, EncodeError> {
         let mut idx = 0;
         if idx + 2 > buf.len() {
@@ -2559,27 +2106,22 @@ impl GetTemperatureAtPointRequest {
 }
 impl Default for GetTemperatureAtPointRequest {
     fn default() -> Self {
-        Self::new(0, 0, TempMeasurementFlag::default())
+        Self {
+            x: 0,
+            y: 0,
+            get_temp_flag: TempMeasurementFlag::default(),
+        }
     }
 }
-
-/// Point temperature
-/// CMD_ID: 0x12 | RESPONSE
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, Copy, PartialEq)]
 pub struct GetTemperatureAtPointResponse {
-    /// Temperature * 100 (Celsius)
     pub temp: u16,
-    /// X coordinate
     pub x: u16,
-    /// Y coordinate
     pub y: u16,
 }
 impl GetTemperatureAtPointResponse {
     pub const CMD_ID: u8 = 0x12;
     pub const IS_REQUEST: bool = false;
-    pub fn new(temp: u16, x: u16, y: u16) -> Self {
-        Self { temp, x, y }
-    }
     pub fn encode(&self, buf: &mut [u8]) -> Result<usize, EncodeError> {
         let mut idx = 0;
         if idx + 2 > buf.len() {
@@ -2633,43 +2175,24 @@ impl GetTemperatureAtPointResponse {
 }
 impl Default for GetTemperatureAtPointResponse {
     fn default() -> Self {
-        Self::new(0, 0, 0)
+        Self {
+            temp: 0,
+            x: 0,
+            y: 0,
+        }
     }
 }
-
-/// Measure temperature in rectangle
-/// CMD_ID: 0x13 | REQUEST
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, Copy, PartialEq)]
 pub struct LocalTemperatureMeasurementRequest {
-    /// Rectangle start X
     pub startx: u16,
-    /// Rectangle start Y
     pub starty: u16,
-    /// Rectangle end X
     pub endx: u16,
-    /// Rectangle end Y
     pub endy: u16,
-    /// Measurement mode
     pub get_temp_flag: TempMeasurementFlag,
 }
 impl LocalTemperatureMeasurementRequest {
     pub const CMD_ID: u8 = 0x13;
     pub const IS_REQUEST: bool = true;
-    pub fn new(
-        startx: u16,
-        starty: u16,
-        endx: u16,
-        endy: u16,
-        get_temp_flag: TempMeasurementFlag,
-    ) -> Self {
-        Self {
-            startx,
-            starty,
-            endx,
-            endy,
-            get_temp_flag,
-        }
-    }
     pub fn encode(&self, buf: &mut [u8]) -> Result<usize, EncodeError> {
         let mut idx = 0;
         if idx + 2 > buf.len() {
@@ -2754,59 +2277,31 @@ impl LocalTemperatureMeasurementRequest {
 }
 impl Default for LocalTemperatureMeasurementRequest {
     fn default() -> Self {
-        Self::new(0, 0, 0, 0, TempMeasurementFlag::default())
+        Self {
+            startx: 0,
+            starty: 0,
+            endx: 0,
+            endy: 0,
+            get_temp_flag: TempMeasurementFlag::default(),
+        }
     }
 }
-
-/// Local temperature data
-/// CMD_ID: 0x13 | RESPONSE
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, Copy, PartialEq)]
 pub struct LocalTemperatureMeasurementResponse {
     pub startx: u16,
     pub starty: u16,
     pub endx: u16,
     pub endy: u16,
-    /// Max temp * 100
     pub temp_max: u16,
-    /// Min temp * 100
     pub temp_min: u16,
-    /// Max temp X coord
     pub temp_max_x: u16,
-    /// Max temp Y coord
     pub temp_max_y: u16,
-    /// Min temp X coord
     pub temp_min_x: u16,
-    /// Min temp Y coord
     pub temp_min_y: u16,
 }
 impl LocalTemperatureMeasurementResponse {
     pub const CMD_ID: u8 = 0x13;
     pub const IS_REQUEST: bool = false;
-    pub fn new(
-        startx: u16,
-        starty: u16,
-        endx: u16,
-        endy: u16,
-        temp_max: u16,
-        temp_min: u16,
-        temp_max_x: u16,
-        temp_max_y: u16,
-        temp_min_x: u16,
-        temp_min_y: u16,
-    ) -> Self {
-        Self {
-            startx,
-            starty,
-            endx,
-            endy,
-            temp_max,
-            temp_min,
-            temp_max_x,
-            temp_max_y,
-            temp_min_x,
-            temp_min_y,
-        }
-    }
     pub fn encode(&self, buf: &mut [u8]) -> Result<usize, EncodeError> {
         let mut idx = 0;
         if idx + 2 > buf.len() {
@@ -2969,23 +2464,27 @@ impl LocalTemperatureMeasurementResponse {
 }
 impl Default for LocalTemperatureMeasurementResponse {
     fn default() -> Self {
-        Self::new(0, 0, 0, 0, 0, 0, 0, 0, 0, 0)
+        Self {
+            startx: 0,
+            starty: 0,
+            endx: 0,
+            endy: 0,
+            temp_max: 0,
+            temp_min: 0,
+            temp_max_x: 0,
+            temp_max_y: 0,
+            temp_min_x: 0,
+            temp_min_y: 0,
+        }
     }
 }
-
-/// Measure global temperature
-/// CMD_ID: 0x14 | REQUEST
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, Copy, PartialEq)]
 pub struct GlobalTemperatureMeasurementRequest {
-    /// Measurement mode
     pub get_temp_flag: TempMeasurementFlag,
 }
 impl GlobalTemperatureMeasurementRequest {
     pub const CMD_ID: u8 = 0x14;
     pub const IS_REQUEST: bool = true;
-    pub fn new(get_temp_flag: TempMeasurementFlag) -> Self {
-        Self { get_temp_flag }
-    }
     pub fn encode(&self, buf: &mut [u8]) -> Result<usize, EncodeError> {
         let mut idx = 0;
         if idx >= buf.len() {
@@ -3008,17 +2507,14 @@ impl GlobalTemperatureMeasurementRequest {
 }
 impl Default for GlobalTemperatureMeasurementRequest {
     fn default() -> Self {
-        Self::new(TempMeasurementFlag::default())
+        Self {
+            get_temp_flag: TempMeasurementFlag::default(),
+        }
     }
 }
-
-/// Global temperature data
-/// CMD_ID: 0x14 | RESPONSE
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, Copy, PartialEq)]
 pub struct GlobalTemperatureMeasurementResponse {
-    /// Max temp * 100
     pub temp_max: u16,
-    /// Min temp * 100
     pub temp_min: u16,
     pub temp_max_x: u16,
     pub temp_max_y: u16,
@@ -3028,23 +2524,6 @@ pub struct GlobalTemperatureMeasurementResponse {
 impl GlobalTemperatureMeasurementResponse {
     pub const CMD_ID: u8 = 0x14;
     pub const IS_REQUEST: bool = false;
-    pub fn new(
-        temp_max: u16,
-        temp_min: u16,
-        temp_max_x: u16,
-        temp_max_y: u16,
-        temp_min_x: u16,
-        temp_min_y: u16,
-    ) -> Self {
-        Self {
-            temp_max,
-            temp_min,
-            temp_max_x,
-            temp_max_y,
-            temp_min_x,
-            temp_min_y,
-        }
-    }
     pub fn encode(&self, buf: &mut [u8]) -> Result<usize, EncodeError> {
         let mut idx = 0;
         if idx + 2 > buf.len() {
@@ -3147,475 +2626,42 @@ impl GlobalTemperatureMeasurementResponse {
 }
 impl Default for GlobalTemperatureMeasurementResponse {
     fn default() -> Self {
-        Self::new(0, 0, 0, 0, 0, 0)
-    }
-}
-
-/// Request laser rangefinder distance
-/// CMD_ID: 0x15 | REQUEST
-#[derive(Debug, Clone, PartialEq)]
-pub struct LaserDistanceRequest {
-    _phantom: core::marker::PhantomData<()>,
-}
-impl LaserDistanceRequest {
-    pub const CMD_ID: u8 = 0x15;
-    pub const IS_REQUEST: bool = true;
-    pub fn new() -> Self {
         Self {
-            _phantom: core::marker::PhantomData,
+            temp_max: 0,
+            temp_min: 0,
+            temp_max_x: 0,
+            temp_max_y: 0,
+            temp_min_x: 0,
+            temp_min_y: 0,
         }
     }
-    pub fn encode(&self, buf: &mut [u8]) -> Result<usize, EncodeError> {
-        let mut idx = 0;
-        Ok(idx)
-    }
-    pub fn decode(data: &[u8]) -> Result<Self, DecodeError> {
-        Ok(Self {
-            _phantom: core::marker::PhantomData,
-        })
-    }
 }
-impl Default for LaserDistanceRequest {
-    fn default() -> Self {
-        Self::new()
-    }
-}
-
-/// Laser distance
-/// CMD_ID: 0x15 | RESPONSE
-#[derive(Debug, Clone, PartialEq)]
-pub struct LaserDistanceResponse {
-    /// Distance in decimeters (dm), min 50
-    pub laser_distance: u16,
-}
-impl LaserDistanceResponse {
-    pub const CMD_ID: u8 = 0x15;
-    pub const IS_REQUEST: bool = false;
-    pub fn new(laser_distance: u16) -> Self {
-        Self { laser_distance }
-    }
-    pub fn encode(&self, buf: &mut [u8]) -> Result<usize, EncodeError> {
-        let mut idx = 0;
-        if idx + 2 > buf.len() {
-            return Err(EncodeError::BufferTooSmall);
-        }
-        buf[idx..idx + 2].copy_from_slice(&self.laser_distance.to_le_bytes());
-        idx += 2;
-        Ok(idx)
-    }
-    pub fn decode(data: &[u8]) -> Result<Self, DecodeError> {
-        let mut idx = 0;
-        if data.len() < idx + 2 {
-            return Err(DecodeError::NotEnoughBytes);
-        }
-        let laser_distance = u16::from_le_bytes(
-            data[idx..idx + 2]
-                .try_into()
-                .map_err(|_| DecodeError::ConversionError)?,
-        );
-        idx += 2;
-        Ok(Self { laser_distance })
-    }
-}
-impl Default for LaserDistanceResponse {
-    fn default() -> Self {
-        Self::new(0)
-    }
-}
-
-/// Request max zoom range
-/// CMD_ID: 0x16 | REQUEST
-#[derive(Debug, Clone, PartialEq)]
-pub struct MaxZoomRangeRequest {
-    _phantom: core::marker::PhantomData<()>,
-}
-impl MaxZoomRangeRequest {
-    pub const CMD_ID: u8 = 0x16;
-    pub const IS_REQUEST: bool = true;
-    pub fn new() -> Self {
-        Self {
-            _phantom: core::marker::PhantomData,
-        }
-    }
-    pub fn encode(&self, buf: &mut [u8]) -> Result<usize, EncodeError> {
-        let mut idx = 0;
-        Ok(idx)
-    }
-    pub fn decode(data: &[u8]) -> Result<Self, DecodeError> {
-        Ok(Self {
-            _phantom: core::marker::PhantomData,
-        })
-    }
-}
-impl Default for MaxZoomRangeRequest {
-    fn default() -> Self {
-        Self::new()
-    }
-}
-
-/// Max zoom range
-/// CMD_ID: 0x16 | RESPONSE
-#[derive(Debug, Clone, PartialEq)]
-pub struct MaxZoomRangeResponse {
-    /// Max zoom integer part
-    pub zoom_max_int: u8,
-    /// Max zoom decimal part
-    pub zoom_max_float: u8,
-}
-impl MaxZoomRangeResponse {
-    pub const CMD_ID: u8 = 0x16;
-    pub const IS_REQUEST: bool = false;
-    pub fn new(zoom_max_int: u8, zoom_max_float: u8) -> Self {
-        Self {
-            zoom_max_int,
-            zoom_max_float,
-        }
-    }
-    pub fn encode(&self, buf: &mut [u8]) -> Result<usize, EncodeError> {
-        let mut idx = 0;
-        if idx + 1 > buf.len() {
-            return Err(EncodeError::BufferTooSmall);
-        }
-        buf[idx..idx + 1].copy_from_slice(&self.zoom_max_int.to_le_bytes());
-        idx += 1;
-        if idx + 1 > buf.len() {
-            return Err(EncodeError::BufferTooSmall);
-        }
-        buf[idx..idx + 1].copy_from_slice(&self.zoom_max_float.to_le_bytes());
-        idx += 1;
-        Ok(idx)
-    }
-    pub fn decode(data: &[u8]) -> Result<Self, DecodeError> {
-        let mut idx = 0;
-        if data.len() < idx + 1 {
-            return Err(DecodeError::NotEnoughBytes);
-        }
-        let zoom_max_int = u8::from_le_bytes(
-            data[idx..idx + 1]
-                .try_into()
-                .map_err(|_| DecodeError::ConversionError)?,
-        );
-        idx += 1;
-        if data.len() < idx + 1 {
-            return Err(DecodeError::NotEnoughBytes);
-        }
-        let zoom_max_float = u8::from_le_bytes(
-            data[idx..idx + 1]
-                .try_into()
-                .map_err(|_| DecodeError::ConversionError)?,
-        );
-        idx += 1;
-        Ok(Self {
-            zoom_max_int,
-            zoom_max_float,
-        })
-    }
-}
-impl Default for MaxZoomRangeResponse {
-    fn default() -> Self {
-        Self::new(0, 0)
-    }
-}
-
-/// Request target lat/lon
-/// CMD_ID: 0x17 | REQUEST
-#[derive(Debug, Clone, PartialEq)]
-pub struct LaserTargetLocationRequest {
-    _phantom: core::marker::PhantomData<()>,
-}
-impl LaserTargetLocationRequest {
-    pub const CMD_ID: u8 = 0x17;
-    pub const IS_REQUEST: bool = true;
-    pub fn new() -> Self {
-        Self {
-            _phantom: core::marker::PhantomData,
-        }
-    }
-    pub fn encode(&self, buf: &mut [u8]) -> Result<usize, EncodeError> {
-        let mut idx = 0;
-        Ok(idx)
-    }
-    pub fn decode(data: &[u8]) -> Result<Self, DecodeError> {
-        Ok(Self {
-            _phantom: core::marker::PhantomData,
-        })
-    }
-}
-impl Default for LaserTargetLocationRequest {
-    fn default() -> Self {
-        Self::new()
-    }
-}
-
-/// Target location
-/// CMD_ID: 0x17 | RESPONSE
-#[derive(Debug, Clone, PartialEq)]
-pub struct LaserTargetLocationResponse {
-    /// Longitude * 1e7 (WGS84)
-    pub lon_degE7: i32,
-    /// Latitude * 1e7 (WGS84)
-    pub lat_degE7: i32,
-}
-impl LaserTargetLocationResponse {
-    pub const CMD_ID: u8 = 0x17;
-    pub const IS_REQUEST: bool = false;
-    pub fn new(lon_degE7: i32, lat_degE7: i32) -> Self {
-        Self {
-            lon_degE7,
-            lat_degE7,
-        }
-    }
-    pub fn encode(&self, buf: &mut [u8]) -> Result<usize, EncodeError> {
-        let mut idx = 0;
-        if idx + 4 > buf.len() {
-            return Err(EncodeError::BufferTooSmall);
-        }
-        buf[idx..idx + 4].copy_from_slice(&self.lon_degE7.to_le_bytes());
-        idx += 4;
-        if idx + 4 > buf.len() {
-            return Err(EncodeError::BufferTooSmall);
-        }
-        buf[idx..idx + 4].copy_from_slice(&self.lat_degE7.to_le_bytes());
-        idx += 4;
-        Ok(idx)
-    }
-    pub fn decode(data: &[u8]) -> Result<Self, DecodeError> {
-        let mut idx = 0;
-        if data.len() < idx + 4 {
-            return Err(DecodeError::NotEnoughBytes);
-        }
-        let lon_degE7 = i32::from_le_bytes(
-            data[idx..idx + 4]
-                .try_into()
-                .map_err(|_| DecodeError::ConversionError)?,
-        );
-        idx += 4;
-        if data.len() < idx + 4 {
-            return Err(DecodeError::NotEnoughBytes);
-        }
-        let lat_degE7 = i32::from_le_bytes(
-            data[idx..idx + 4]
-                .try_into()
-                .map_err(|_| DecodeError::ConversionError)?,
-        );
-        idx += 4;
-        Ok(Self {
-            lon_degE7,
-            lat_degE7,
-        })
-    }
-}
-impl Default for LaserTargetLocationResponse {
-    fn default() -> Self {
-        Self::new(0, 0)
-    }
-}
-
-/// Request current zoom level
-/// CMD_ID: 0x18 | REQUEST
-#[derive(Debug, Clone, PartialEq)]
-pub struct CurrentZoomRequest {
-    _phantom: core::marker::PhantomData<()>,
-}
-impl CurrentZoomRequest {
-    pub const CMD_ID: u8 = 0x18;
-    pub const IS_REQUEST: bool = true;
-    pub fn new() -> Self {
-        Self {
-            _phantom: core::marker::PhantomData,
-        }
-    }
-    pub fn encode(&self, buf: &mut [u8]) -> Result<usize, EncodeError> {
-        let mut idx = 0;
-        Ok(idx)
-    }
-    pub fn decode(data: &[u8]) -> Result<Self, DecodeError> {
-        Ok(Self {
-            _phantom: core::marker::PhantomData,
-        })
-    }
-}
-impl Default for CurrentZoomRequest {
-    fn default() -> Self {
-        Self::new()
-    }
-}
-
-/// Current zoom
-/// CMD_ID: 0x18 | RESPONSE
-#[derive(Debug, Clone, PartialEq)]
-pub struct CurrentZoomResponse {
-    /// Zoom integer part
-    pub zoom_int: u8,
-    /// Zoom decimal part
-    pub zoom_float: u8,
-}
-impl CurrentZoomResponse {
-    pub const CMD_ID: u8 = 0x18;
-    pub const IS_REQUEST: bool = false;
-    pub fn new(zoom_int: u8, zoom_float: u8) -> Self {
-        Self {
-            zoom_int,
-            zoom_float,
-        }
-    }
-    pub fn encode(&self, buf: &mut [u8]) -> Result<usize, EncodeError> {
-        let mut idx = 0;
-        if idx + 1 > buf.len() {
-            return Err(EncodeError::BufferTooSmall);
-        }
-        buf[idx..idx + 1].copy_from_slice(&self.zoom_int.to_le_bytes());
-        idx += 1;
-        if idx + 1 > buf.len() {
-            return Err(EncodeError::BufferTooSmall);
-        }
-        buf[idx..idx + 1].copy_from_slice(&self.zoom_float.to_le_bytes());
-        idx += 1;
-        Ok(idx)
-    }
-    pub fn decode(data: &[u8]) -> Result<Self, DecodeError> {
-        let mut idx = 0;
-        if data.len() < idx + 1 {
-            return Err(DecodeError::NotEnoughBytes);
-        }
-        let zoom_int = u8::from_le_bytes(
-            data[idx..idx + 1]
-                .try_into()
-                .map_err(|_| DecodeError::ConversionError)?,
-        );
-        idx += 1;
-        if data.len() < idx + 1 {
-            return Err(DecodeError::NotEnoughBytes);
-        }
-        let zoom_float = u8::from_le_bytes(
-            data[idx..idx + 1]
-                .try_into()
-                .map_err(|_| DecodeError::ConversionError)?,
-        );
-        idx += 1;
-        Ok(Self {
-            zoom_int,
-            zoom_float,
-        })
-    }
-}
-impl Default for CurrentZoomResponse {
-    fn default() -> Self {
-        Self::new(0, 0)
-    }
-}
-
-/// Request current gimbal mode
-/// CMD_ID: 0x19 | REQUEST
-#[derive(Debug, Clone, PartialEq)]
-pub struct GimbalModeRequest {
-    _phantom: core::marker::PhantomData<()>,
-}
-impl GimbalModeRequest {
-    pub const CMD_ID: u8 = 0x19;
-    pub const IS_REQUEST: bool = true;
-    pub fn new() -> Self {
-        Self {
-            _phantom: core::marker::PhantomData,
-        }
-    }
-    pub fn encode(&self, buf: &mut [u8]) -> Result<usize, EncodeError> {
-        let mut idx = 0;
-        Ok(idx)
-    }
-    pub fn decode(data: &[u8]) -> Result<Self, DecodeError> {
-        Ok(Self {
-            _phantom: core::marker::PhantomData,
-        })
-    }
-}
-impl Default for GimbalModeRequest {
-    fn default() -> Self {
-        Self::new()
-    }
-}
-
-/// Gimbal mode
-/// CMD_ID: 0x19 | RESPONSE
-#[derive(Debug, Clone, PartialEq)]
-pub struct GimbalModeResponse {
-    /// Current mode
-    pub gimbal_mode: GimbalMode,
-}
-impl GimbalModeResponse {
-    pub const CMD_ID: u8 = 0x19;
-    pub const IS_REQUEST: bool = false;
-    pub fn new(gimbal_mode: GimbalMode) -> Self {
-        Self { gimbal_mode }
-    }
-    pub fn encode(&self, buf: &mut [u8]) -> Result<usize, EncodeError> {
-        let mut idx = 0;
-        if idx >= buf.len() {
-            return Err(EncodeError::BufferTooSmall);
-        }
-        buf[idx] = self.gimbal_mode as u8;
-        idx += 1;
-        Ok(idx)
-    }
-    pub fn decode(data: &[u8]) -> Result<Self, DecodeError> {
-        let mut idx = 0;
-        if idx >= data.len() {
-            return Err(DecodeError::NotEnoughBytes);
-        }
-        let gimbal_mode = GimbalMode::from_u8(data[idx]).ok_or(DecodeError::InvalidEnumValue)?;
-        idx += 1;
-        Ok(Self { gimbal_mode })
-    }
-}
-impl Default for GimbalModeResponse {
-    fn default() -> Self {
-        Self::new(GimbalMode::default())
-    }
-}
-
-/// Request thermal pseudo-color
-/// CMD_ID: 0x1A | REQUEST
-#[derive(Debug, Clone, PartialEq)]
-pub struct PseudoColorRequest {
-    _phantom: core::marker::PhantomData<()>,
-}
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct PseudoColorRequest {}
 impl PseudoColorRequest {
     pub const CMD_ID: u8 = 0x1A;
     pub const IS_REQUEST: bool = true;
-    pub fn new() -> Self {
-        Self {
-            _phantom: core::marker::PhantomData,
-        }
-    }
     pub fn encode(&self, buf: &mut [u8]) -> Result<usize, EncodeError> {
         let mut idx = 0;
         Ok(idx)
     }
     pub fn decode(data: &[u8]) -> Result<Self, DecodeError> {
-        Ok(Self {
-            _phantom: core::marker::PhantomData,
-        })
+        let mut idx = 0;
+        Ok(Self {})
     }
 }
 impl Default for PseudoColorRequest {
     fn default() -> Self {
-        Self::new()
+        Self {}
     }
 }
-
-/// Pseudo-color
-/// CMD_ID: 0x1A | RESPONSE
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, Copy, PartialEq)]
 pub struct PseudoColorResponse {
-    /// Current color palette
     pub pseudo_color: PseudoColor,
 }
 impl PseudoColorResponse {
     pub const CMD_ID: u8 = 0x1A;
     pub const IS_REQUEST: bool = false;
-    pub fn new(pseudo_color: PseudoColor) -> Self {
-        Self { pseudo_color }
-    }
     pub fn encode(&self, buf: &mut [u8]) -> Result<usize, EncodeError> {
         let mut idx = 0;
         if idx >= buf.len() {
@@ -3637,23 +2683,18 @@ impl PseudoColorResponse {
 }
 impl Default for PseudoColorResponse {
     fn default() -> Self {
-        Self::new(PseudoColor::default())
+        Self {
+            pseudo_color: PseudoColor::default(),
+        }
     }
 }
-
-/// Set thermal pseudo-color
-/// CMD_ID: 0x1B | REQUEST
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, Copy, PartialEq)]
 pub struct SetPseudoColorRequest {
-    /// Color palette to set
     pub pseudo_color: PseudoColor,
 }
 impl SetPseudoColorRequest {
     pub const CMD_ID: u8 = 0x1B;
     pub const IS_REQUEST: bool = true;
-    pub fn new(pseudo_color: PseudoColor) -> Self {
-        Self { pseudo_color }
-    }
     pub fn encode(&self, buf: &mut [u8]) -> Result<usize, EncodeError> {
         let mut idx = 0;
         if idx >= buf.len() {
@@ -3675,23 +2716,18 @@ impl SetPseudoColorRequest {
 }
 impl Default for SetPseudoColorRequest {
     fn default() -> Self {
-        Self::new(PseudoColor::default())
+        Self {
+            pseudo_color: PseudoColor::default(),
+        }
     }
 }
-
-/// Set pseudo-color response
-/// CMD_ID: 0x1B | RESPONSE
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, Copy, PartialEq)]
 pub struct SetPseudoColorResponse {
-    /// Confirmed color
     pub pseudo_color: PseudoColor,
 }
 impl SetPseudoColorResponse {
     pub const CMD_ID: u8 = 0x1B;
     pub const IS_REQUEST: bool = false;
-    pub fn new(pseudo_color: PseudoColor) -> Self {
-        Self { pseudo_color }
-    }
     pub fn encode(&self, buf: &mut [u8]) -> Result<usize, EncodeError> {
         let mut idx = 0;
         if idx >= buf.len() {
@@ -3713,23 +2749,18 @@ impl SetPseudoColorResponse {
 }
 impl Default for SetPseudoColorResponse {
     fn default() -> Self {
-        Self::new(PseudoColor::default())
+        Self {
+            pseudo_color: PseudoColor::default(),
+        }
     }
 }
-
-/// Request camera encoding params
-/// CMD_ID: 0x20 | REQUEST
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, Copy, PartialEq)]
 pub struct EncodingParamsRequest {
-    /// Which stream
     pub stream_type: StreamType,
 }
 impl EncodingParamsRequest {
     pub const CMD_ID: u8 = 0x20;
     pub const IS_REQUEST: bool = true;
-    pub fn new(stream_type: StreamType) -> Self {
-        Self { stream_type }
-    }
     pub fn encode(&self, buf: &mut [u8]) -> Result<usize, EncodeError> {
         let mut idx = 0;
         if idx >= buf.len() {
@@ -3751,46 +2782,23 @@ impl EncodingParamsRequest {
 }
 impl Default for EncodingParamsRequest {
     fn default() -> Self {
-        Self::new(StreamType::default())
+        Self {
+            stream_type: StreamType::default(),
+        }
     }
 }
-
-/// Encoding parameters
-/// CMD_ID: 0x20 | RESPONSE
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, Copy, PartialEq)]
 pub struct EncodingParamsResponse {
     pub stream_type: StreamType,
-    /// H264/H265
     pub video_enc_type: VideoEncType,
-    /// Width
     pub resolution_w: u16,
-    /// Height
     pub resolution_h: u16,
-    /// Bitrate in Kbps
     pub video_bitrate: u16,
-    /// Frame rate
     pub video_framerate: u8,
 }
 impl EncodingParamsResponse {
     pub const CMD_ID: u8 = 0x20;
     pub const IS_REQUEST: bool = false;
-    pub fn new(
-        stream_type: StreamType,
-        video_enc_type: VideoEncType,
-        resolution_w: u16,
-        resolution_h: u16,
-        video_bitrate: u16,
-        video_framerate: u8,
-    ) -> Self {
-        Self {
-            stream_type,
-            video_enc_type,
-            resolution_w,
-            resolution_h,
-            video_bitrate,
-            video_framerate,
-        }
-    }
     pub fn encode(&self, buf: &mut [u8]) -> Result<usize, EncodeError> {
         let mut idx = 0;
         if idx >= buf.len() {
@@ -3886,44 +2894,28 @@ impl EncodingParamsResponse {
 }
 impl Default for EncodingParamsResponse {
     fn default() -> Self {
-        Self::new(StreamType::default(), VideoEncType::default(), 0, 0, 0, 0)
+        Self {
+            stream_type: StreamType::default(),
+            video_enc_type: VideoEncType::default(),
+            resolution_w: 0,
+            resolution_h: 0,
+            video_bitrate: 0,
+            video_framerate: 0,
+        }
     }
 }
-
-/// Set camera encoding params
-/// CMD_ID: 0x21 | REQUEST
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, Copy, PartialEq)]
 pub struct SetEncodingParamsRequest {
     pub stream_type: StreamType,
     pub video_enc_type: VideoEncType,
-    /// Width (1920/1280)
     pub resolution_w: u16,
-    /// Height (1080/720)
     pub resolution_h: u16,
-    /// Bitrate in Kbps
     pub video_bitrate: u16,
     pub reserved: u8,
 }
 impl SetEncodingParamsRequest {
     pub const CMD_ID: u8 = 0x21;
     pub const IS_REQUEST: bool = true;
-    pub fn new(
-        stream_type: StreamType,
-        video_enc_type: VideoEncType,
-        resolution_w: u16,
-        resolution_h: u16,
-        video_bitrate: u16,
-        reserved: u8,
-    ) -> Self {
-        Self {
-            stream_type,
-            video_enc_type,
-            resolution_w,
-            resolution_h,
-            video_bitrate,
-            reserved,
-        }
-    }
     pub fn encode(&self, buf: &mut [u8]) -> Result<usize, EncodeError> {
         let mut idx = 0;
         if idx >= buf.len() {
@@ -4019,27 +3011,24 @@ impl SetEncodingParamsRequest {
 }
 impl Default for SetEncodingParamsRequest {
     fn default() -> Self {
-        Self::new(StreamType::default(), VideoEncType::default(), 0, 0, 0, 0)
+        Self {
+            stream_type: StreamType::default(),
+            video_enc_type: VideoEncType::default(),
+            resolution_w: 0,
+            resolution_h: 0,
+            video_bitrate: 0,
+            reserved: 0,
+        }
     }
 }
-
-/// Set encoding response
-/// CMD_ID: 0x21 | RESPONSE
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, Copy, PartialEq)]
 pub struct SetEncodingParamsResponse {
     pub stream_type: StreamType,
-    /// Success or Failure
     pub status: BooleanStatus,
 }
 impl SetEncodingParamsResponse {
     pub const CMD_ID: u8 = 0x21;
     pub const IS_REQUEST: bool = false;
-    pub fn new(stream_type: StreamType, status: BooleanStatus) -> Self {
-        Self {
-            stream_type,
-            status,
-        }
-    }
     pub fn encode(&self, buf: &mut [u8]) -> Result<usize, EncodeError> {
         let mut idx = 0;
         if idx >= buf.len() {
@@ -4074,51 +3063,25 @@ impl SetEncodingParamsResponse {
 }
 impl Default for SetEncodingParamsResponse {
     fn default() -> Self {
-        Self::new(StreamType::default(), BooleanStatus::default())
+        Self {
+            stream_type: StreamType::default(),
+            status: BooleanStatus::default(),
+        }
     }
 }
-
-/// Send aircraft attitude to gimbal
-/// CMD_ID: 0x22 | REQUEST
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, Copy, PartialEq)]
 pub struct SendAircraftAttitude {
-    /// Time since boot (ms)
     pub time_boot_ms: u32,
-    /// Roll (radians)
     pub roll: f32,
-    /// Pitch (radians)
     pub pitch: f32,
-    /// Yaw (radians)
     pub yaw: f32,
-    /// Roll rate (rad/s)
     pub rollspeed: f32,
-    /// Pitch rate (rad/s)
     pub pitchspeed: f32,
-    /// Yaw rate (rad/s)
     pub yawspeed: f32,
 }
 impl SendAircraftAttitude {
     pub const CMD_ID: u8 = 0x22;
     pub const IS_REQUEST: bool = true;
-    pub fn new(
-        time_boot_ms: u32,
-        roll: f32,
-        pitch: f32,
-        yaw: f32,
-        rollspeed: f32,
-        pitchspeed: f32,
-        yawspeed: f32,
-    ) -> Self {
-        Self {
-            time_boot_ms,
-            roll,
-            pitch,
-            yaw,
-            rollspeed,
-            pitchspeed,
-            yawspeed,
-        }
-    }
     pub fn encode(&self, buf: &mut [u8]) -> Result<usize, EncodeError> {
         let mut idx = 0;
         if idx + 4 > buf.len() {
@@ -4236,103 +3199,43 @@ impl SendAircraftAttitude {
 }
 impl Default for SendAircraftAttitude {
     fn default() -> Self {
-        Self::new(0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0)
+        Self {
+            time_boot_ms: 0,
+            roll: 0.0,
+            pitch: 0.0,
+            yaw: 0.0,
+            rollspeed: 0.0,
+            pitchspeed: 0.0,
+            yawspeed: 0.0,
+        }
     }
 }
-
-/// Send RC channel data to gimbal
-/// CMD_ID: 0x23 | REQUEST
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, Copy, PartialEq)]
 pub struct SendRcChannelDataRequest {
-    /// RC channel 1 value [us]
     pub chan1_raw: u16,
-    /// RC channel 2 value [us]
     pub chan2_raw: u16,
-    /// RC channel 3 value [us]
     pub chan3_raw: u16,
-    /// RC channel 4 value [us]
     pub chan4_raw: u16,
-    /// RC channel 5 value [us]
     pub chan5_raw: u16,
-    /// RC channel 6 value [us]
     pub chan6_raw: u16,
-    /// RC channel 7 value [us]
     pub chan7_raw: u16,
-    /// RC channel 8 value [us]
     pub chan8_raw: u16,
-    /// RC channel 9 value [us]
     pub chan9_raw: u16,
-    /// RC channel 10 value [us]
     pub chan10_raw: u16,
-    /// RC channel 11 value [us]
     pub chan11_raw: u16,
-    /// RC channel 12 value [us]
     pub chan12_raw: u16,
-    /// RC channel 13 value [us]
     pub chan13_raw: u16,
-    /// RC channel 14 value [us]
     pub chan14_raw: u16,
-    /// RC channel 15 value [us]
     pub chan15_raw: u16,
-    /// RC channel 16 value [us]
     pub chan16_raw: u16,
-    /// RC channel 17 value [us]
     pub chan17_raw: u16,
-    /// RC channel 18 value [us]
     pub chan18_raw: u16,
-    /// Total number of RC channels
     pub chancount: u8,
-    /// Receive signal strength indicator [0-254], 255: invalid
     pub rssi: u8,
 }
 impl SendRcChannelDataRequest {
     pub const CMD_ID: u8 = 0x23;
     pub const IS_REQUEST: bool = true;
-    pub fn new(
-        chan1_raw: u16,
-        chan2_raw: u16,
-        chan3_raw: u16,
-        chan4_raw: u16,
-        chan5_raw: u16,
-        chan6_raw: u16,
-        chan7_raw: u16,
-        chan8_raw: u16,
-        chan9_raw: u16,
-        chan10_raw: u16,
-        chan11_raw: u16,
-        chan12_raw: u16,
-        chan13_raw: u16,
-        chan14_raw: u16,
-        chan15_raw: u16,
-        chan16_raw: u16,
-        chan17_raw: u16,
-        chan18_raw: u16,
-        chancount: u8,
-        rssi: u8,
-    ) -> Self {
-        Self {
-            chan1_raw,
-            chan2_raw,
-            chan3_raw,
-            chan4_raw,
-            chan5_raw,
-            chan6_raw,
-            chan7_raw,
-            chan8_raw,
-            chan9_raw,
-            chan10_raw,
-            chan11_raw,
-            chan12_raw,
-            chan13_raw,
-            chan14_raw,
-            chan15_raw,
-            chan16_raw,
-            chan17_raw,
-            chan18_raw,
-            chancount,
-            rssi,
-        }
-    }
     pub fn encode(&self, buf: &mut [u8]) -> Result<usize, EncodeError> {
         let mut idx = 0;
         if idx + 2 > buf.len() {
@@ -4645,28 +3548,38 @@ impl SendRcChannelDataRequest {
 }
 impl Default for SendRcChannelDataRequest {
     fn default() -> Self {
-        Self::new(0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0)
+        Self {
+            chan1_raw: 0,
+            chan2_raw: 0,
+            chan3_raw: 0,
+            chan4_raw: 0,
+            chan5_raw: 0,
+            chan6_raw: 0,
+            chan7_raw: 0,
+            chan8_raw: 0,
+            chan9_raw: 0,
+            chan10_raw: 0,
+            chan11_raw: 0,
+            chan12_raw: 0,
+            chan13_raw: 0,
+            chan14_raw: 0,
+            chan15_raw: 0,
+            chan16_raw: 0,
+            chan17_raw: 0,
+            chan18_raw: 0,
+            chancount: 0,
+            rssi: 0,
+        }
     }
 }
-
-/// Request flight controller to send data stream
-/// CMD_ID: 0x24 | REQUEST
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, Copy, PartialEq)]
 pub struct RequestFlightControllerDataStreamRequest {
-    /// Data stream type
     pub data_type: DataStreamType,
-    /// Output frequency
     pub data_freq: DataFrequency,
 }
 impl RequestFlightControllerDataStreamRequest {
     pub const CMD_ID: u8 = 0x24;
     pub const IS_REQUEST: bool = true;
-    pub fn new(data_type: DataStreamType, data_freq: DataFrequency) -> Self {
-        Self {
-            data_type,
-            data_freq,
-        }
-    }
     pub fn encode(&self, buf: &mut [u8]) -> Result<usize, EncodeError> {
         let mut idx = 0;
         if idx >= buf.len() {
@@ -4701,23 +3614,19 @@ impl RequestFlightControllerDataStreamRequest {
 }
 impl Default for RequestFlightControllerDataStreamRequest {
     fn default() -> Self {
-        Self::new(DataStreamType::default(), DataFrequency::default())
+        Self {
+            data_type: DataStreamType::default(),
+            data_freq: DataFrequency::default(),
+        }
     }
 }
-
-/// Flight controller data stream response
-/// CMD_ID: 0x24 | RESPONSE
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, Copy, PartialEq)]
 pub struct RequestFlightControllerDataStreamResponse {
-    /// Confirmed data type
     pub data_type: DataStreamType,
 }
 impl RequestFlightControllerDataStreamResponse {
     pub const CMD_ID: u8 = 0x24;
     pub const IS_REQUEST: bool = false;
-    pub fn new(data_type: DataStreamType) -> Self {
-        Self { data_type }
-    }
     pub fn encode(&self, buf: &mut [u8]) -> Result<usize, EncodeError> {
         let mut idx = 0;
         if idx >= buf.len() {
@@ -4739,649 +3648,18 @@ impl RequestFlightControllerDataStreamResponse {
 }
 impl Default for RequestFlightControllerDataStreamResponse {
     fn default() -> Self {
-        Self::new(DataStreamType::default())
-    }
-}
-
-/// Request gimbal data stream
-/// CMD_ID: 0x25 | REQUEST
-#[derive(Debug, Clone, PartialEq)]
-pub struct RequestDataStreamRequest {
-    /// Data stream type
-    pub data_type: DataStreamType,
-    /// Frequency
-    pub data_freq: DataFrequency,
-}
-impl RequestDataStreamRequest {
-    pub const CMD_ID: u8 = 0x25;
-    pub const IS_REQUEST: bool = true;
-    pub fn new(data_type: DataStreamType, data_freq: DataFrequency) -> Self {
         Self {
-            data_type,
-            data_freq,
+            data_type: DataStreamType::default(),
         }
-    }
-    pub fn encode(&self, buf: &mut [u8]) -> Result<usize, EncodeError> {
-        let mut idx = 0;
-        if idx >= buf.len() {
-            return Err(EncodeError::BufferTooSmall);
-        }
-        buf[idx] = self.data_type as u8;
-        idx += 1;
-        if idx >= buf.len() {
-            return Err(EncodeError::BufferTooSmall);
-        }
-        buf[idx] = self.data_freq as u8;
-        idx += 1;
-        Ok(idx)
-    }
-    pub fn decode(data: &[u8]) -> Result<Self, DecodeError> {
-        let mut idx = 0;
-        if idx >= data.len() {
-            return Err(DecodeError::NotEnoughBytes);
-        }
-        let data_type = DataStreamType::from_u8(data[idx]).ok_or(DecodeError::InvalidEnumValue)?;
-        idx += 1;
-        if idx >= data.len() {
-            return Err(DecodeError::NotEnoughBytes);
-        }
-        let data_freq = DataFrequency::from_u8(data[idx]).ok_or(DecodeError::InvalidEnumValue)?;
-        idx += 1;
-        Ok(Self {
-            data_type,
-            data_freq,
-        })
     }
 }
-impl Default for RequestDataStreamRequest {
-    fn default() -> Self {
-        Self::new(DataStreamType::default(), DataFrequency::default())
-    }
-}
-
-/// Data stream config response
-/// CMD_ID: 0x25 | RESPONSE
-#[derive(Debug, Clone, PartialEq)]
-pub struct RequestDataStreamResponse {
-    /// Confirmed data type
-    pub data_type: DataStreamType,
-}
-impl RequestDataStreamResponse {
-    pub const CMD_ID: u8 = 0x25;
-    pub const IS_REQUEST: bool = false;
-    pub fn new(data_type: DataStreamType) -> Self {
-        Self { data_type }
-    }
-    pub fn encode(&self, buf: &mut [u8]) -> Result<usize, EncodeError> {
-        let mut idx = 0;
-        if idx >= buf.len() {
-            return Err(EncodeError::BufferTooSmall);
-        }
-        buf[idx] = self.data_type as u8;
-        idx += 1;
-        Ok(idx)
-    }
-    pub fn decode(data: &[u8]) -> Result<Self, DecodeError> {
-        let mut idx = 0;
-        if idx >= data.len() {
-            return Err(DecodeError::NotEnoughBytes);
-        }
-        let data_type = DataStreamType::from_u8(data[idx]).ok_or(DecodeError::InvalidEnumValue)?;
-        idx += 1;
-        Ok(Self { data_type })
-    }
-}
-impl Default for RequestDataStreamResponse {
-    fn default() -> Self {
-        Self::new(DataStreamType::default())
-    }
-}
-
-/// Request magnetic encoder angles
-/// CMD_ID: 0x26 | REQUEST
-#[derive(Debug, Clone, PartialEq)]
-pub struct MagneticEncoderAngleRequest {
-    _phantom: core::marker::PhantomData<()>,
-}
-impl MagneticEncoderAngleRequest {
-    pub const CMD_ID: u8 = 0x26;
-    pub const IS_REQUEST: bool = true;
-    pub fn new() -> Self {
-        Self {
-            _phantom: core::marker::PhantomData,
-        }
-    }
-    pub fn encode(&self, buf: &mut [u8]) -> Result<usize, EncodeError> {
-        let mut idx = 0;
-        Ok(idx)
-    }
-    pub fn decode(data: &[u8]) -> Result<Self, DecodeError> {
-        Ok(Self {
-            _phantom: core::marker::PhantomData,
-        })
-    }
-}
-impl Default for MagneticEncoderAngleRequest {
-    fn default() -> Self {
-        Self::new()
-    }
-}
-
-/// Magnetic encoder angles
-/// CMD_ID: 0x26 | RESPONSE
-#[derive(Debug, Clone, PartialEq)]
-pub struct MagneticEncoderAngleResponse {
-    /// Yaw * 10
-    pub yaw_angle: i16,
-    /// Pitch * 10
-    pub pitch_angle: i16,
-    /// Roll * 10
-    pub roll_angle: i16,
-}
-impl MagneticEncoderAngleResponse {
-    pub const CMD_ID: u8 = 0x26;
-    pub const IS_REQUEST: bool = false;
-    pub fn new(yaw_angle: i16, pitch_angle: i16, roll_angle: i16) -> Self {
-        Self {
-            yaw_angle,
-            pitch_angle,
-            roll_angle,
-        }
-    }
-    pub fn encode(&self, buf: &mut [u8]) -> Result<usize, EncodeError> {
-        let mut idx = 0;
-        if idx + 2 > buf.len() {
-            return Err(EncodeError::BufferTooSmall);
-        }
-        buf[idx..idx + 2].copy_from_slice(&self.yaw_angle.to_le_bytes());
-        idx += 2;
-        if idx + 2 > buf.len() {
-            return Err(EncodeError::BufferTooSmall);
-        }
-        buf[idx..idx + 2].copy_from_slice(&self.pitch_angle.to_le_bytes());
-        idx += 2;
-        if idx + 2 > buf.len() {
-            return Err(EncodeError::BufferTooSmall);
-        }
-        buf[idx..idx + 2].copy_from_slice(&self.roll_angle.to_le_bytes());
-        idx += 2;
-        Ok(idx)
-    }
-    pub fn decode(data: &[u8]) -> Result<Self, DecodeError> {
-        let mut idx = 0;
-        if data.len() < idx + 2 {
-            return Err(DecodeError::NotEnoughBytes);
-        }
-        let yaw_angle = i16::from_le_bytes(
-            data[idx..idx + 2]
-                .try_into()
-                .map_err(|_| DecodeError::ConversionError)?,
-        );
-        idx += 2;
-        if data.len() < idx + 2 {
-            return Err(DecodeError::NotEnoughBytes);
-        }
-        let pitch_angle = i16::from_le_bytes(
-            data[idx..idx + 2]
-                .try_into()
-                .map_err(|_| DecodeError::ConversionError)?,
-        );
-        idx += 2;
-        if data.len() < idx + 2 {
-            return Err(DecodeError::NotEnoughBytes);
-        }
-        let roll_angle = i16::from_le_bytes(
-            data[idx..idx + 2]
-                .try_into()
-                .map_err(|_| DecodeError::ConversionError)?,
-        );
-        idx += 2;
-        Ok(Self {
-            yaw_angle,
-            pitch_angle,
-            roll_angle,
-        })
-    }
-}
-impl Default for MagneticEncoderAngleResponse {
-    fn default() -> Self {
-        Self::new(0, 0, 0)
-    }
-}
-
-/// Request gimbal control mode
-/// CMD_ID: 0x27 | REQUEST
-#[derive(Debug, Clone, PartialEq)]
-pub struct GimbalControlModeRequest {
-    _phantom: core::marker::PhantomData<()>,
-}
-impl GimbalControlModeRequest {
-    pub const CMD_ID: u8 = 0x27;
-    pub const IS_REQUEST: bool = true;
-    pub fn new() -> Self {
-        Self {
-            _phantom: core::marker::PhantomData,
-        }
-    }
-    pub fn encode(&self, buf: &mut [u8]) -> Result<usize, EncodeError> {
-        let mut idx = 0;
-        Ok(idx)
-    }
-    pub fn decode(data: &[u8]) -> Result<Self, DecodeError> {
-        Ok(Self {
-            _phantom: core::marker::PhantomData,
-        })
-    }
-}
-impl Default for GimbalControlModeRequest {
-    fn default() -> Self {
-        Self::new()
-    }
-}
-
-/// Gimbal control mode
-/// CMD_ID: 0x27 | RESPONSE
-#[derive(Debug, Clone, PartialEq)]
-pub struct GimbalControlModeResponse {
-    /// Current control mode
-    pub control_mode: ControlMode,
-}
-impl GimbalControlModeResponse {
-    pub const CMD_ID: u8 = 0x27;
-    pub const IS_REQUEST: bool = false;
-    pub fn new(control_mode: ControlMode) -> Self {
-        Self { control_mode }
-    }
-    pub fn encode(&self, buf: &mut [u8]) -> Result<usize, EncodeError> {
-        let mut idx = 0;
-        if idx >= buf.len() {
-            return Err(EncodeError::BufferTooSmall);
-        }
-        buf[idx] = self.control_mode as u8;
-        idx += 1;
-        Ok(idx)
-    }
-    pub fn decode(data: &[u8]) -> Result<Self, DecodeError> {
-        let mut idx = 0;
-        if idx >= data.len() {
-            return Err(DecodeError::NotEnoughBytes);
-        }
-        let control_mode = ControlMode::from_u8(data[idx]).ok_or(DecodeError::InvalidEnumValue)?;
-        idx += 1;
-        Ok(Self { control_mode })
-    }
-}
-impl Default for GimbalControlModeResponse {
-    fn default() -> Self {
-        Self::new(ControlMode::default())
-    }
-}
-
-/// Request weak control threshold
-/// CMD_ID: 0x28 | REQUEST
-#[derive(Debug, Clone, PartialEq)]
-pub struct WeakControlThresholdRequest {
-    _phantom: core::marker::PhantomData<()>,
-}
-impl WeakControlThresholdRequest {
-    pub const CMD_ID: u8 = 0x28;
-    pub const IS_REQUEST: bool = true;
-    pub fn new() -> Self {
-        Self {
-            _phantom: core::marker::PhantomData,
-        }
-    }
-    pub fn encode(&self, buf: &mut [u8]) -> Result<usize, EncodeError> {
-        let mut idx = 0;
-        Ok(idx)
-    }
-    pub fn decode(data: &[u8]) -> Result<Self, DecodeError> {
-        Ok(Self {
-            _phantom: core::marker::PhantomData,
-        })
-    }
-}
-impl Default for WeakControlThresholdRequest {
-    fn default() -> Self {
-        Self::new()
-    }
-}
-
-/// Weak control threshold data
-/// CMD_ID: 0x28 | RESPONSE
-#[derive(Debug, Clone, PartialEq)]
-pub struct WeakControlThresholdResponse {
-    /// Voltage limit range * 10 (10-50)
-    pub weak_control_limit_value: i16,
-    /// Voltage threshold * 10 (20-50)
-    pub voltage_threshold: i16,
-    /// Angular error threshold * 10 (30-300)
-    pub angular_error_threshold: i16,
-}
-impl WeakControlThresholdResponse {
-    pub const CMD_ID: u8 = 0x28;
-    pub const IS_REQUEST: bool = false;
-    pub fn new(
-        weak_control_limit_value: i16,
-        voltage_threshold: i16,
-        angular_error_threshold: i16,
-    ) -> Self {
-        Self {
-            weak_control_limit_value,
-            voltage_threshold,
-            angular_error_threshold,
-        }
-    }
-    pub fn encode(&self, buf: &mut [u8]) -> Result<usize, EncodeError> {
-        let mut idx = 0;
-        if idx + 2 > buf.len() {
-            return Err(EncodeError::BufferTooSmall);
-        }
-        buf[idx..idx + 2].copy_from_slice(&self.weak_control_limit_value.to_le_bytes());
-        idx += 2;
-        if idx + 2 > buf.len() {
-            return Err(EncodeError::BufferTooSmall);
-        }
-        buf[idx..idx + 2].copy_from_slice(&self.voltage_threshold.to_le_bytes());
-        idx += 2;
-        if idx + 2 > buf.len() {
-            return Err(EncodeError::BufferTooSmall);
-        }
-        buf[idx..idx + 2].copy_from_slice(&self.angular_error_threshold.to_le_bytes());
-        idx += 2;
-        Ok(idx)
-    }
-    pub fn decode(data: &[u8]) -> Result<Self, DecodeError> {
-        let mut idx = 0;
-        if data.len() < idx + 2 {
-            return Err(DecodeError::NotEnoughBytes);
-        }
-        let weak_control_limit_value = i16::from_le_bytes(
-            data[idx..idx + 2]
-                .try_into()
-                .map_err(|_| DecodeError::ConversionError)?,
-        );
-        idx += 2;
-        if data.len() < idx + 2 {
-            return Err(DecodeError::NotEnoughBytes);
-        }
-        let voltage_threshold = i16::from_le_bytes(
-            data[idx..idx + 2]
-                .try_into()
-                .map_err(|_| DecodeError::ConversionError)?,
-        );
-        idx += 2;
-        if data.len() < idx + 2 {
-            return Err(DecodeError::NotEnoughBytes);
-        }
-        let angular_error_threshold = i16::from_le_bytes(
-            data[idx..idx + 2]
-                .try_into()
-                .map_err(|_| DecodeError::ConversionError)?,
-        );
-        idx += 2;
-        Ok(Self {
-            weak_control_limit_value,
-            voltage_threshold,
-            angular_error_threshold,
-        })
-    }
-}
-impl Default for WeakControlThresholdResponse {
-    fn default() -> Self {
-        Self::new(0, 0, 0)
-    }
-}
-
-/// Set weak control threshold
-/// CMD_ID: 0x29 | REQUEST
-#[derive(Debug, Clone, PartialEq)]
-pub struct SetWeakControlThresholdRequest {
-    /// Voltage limit range * 10 (10-50)
-    pub weak_control_limit_value: i16,
-    /// Voltage threshold * 10 (20-50)
-    pub voltage_threshold: i16,
-    /// Angular error threshold * 10 (30-300)
-    pub angular_error_threshold: i16,
-}
-impl SetWeakControlThresholdRequest {
-    pub const CMD_ID: u8 = 0x29;
-    pub const IS_REQUEST: bool = true;
-    pub fn new(
-        weak_control_limit_value: i16,
-        voltage_threshold: i16,
-        angular_error_threshold: i16,
-    ) -> Self {
-        Self {
-            weak_control_limit_value,
-            voltage_threshold,
-            angular_error_threshold,
-        }
-    }
-    pub fn encode(&self, buf: &mut [u8]) -> Result<usize, EncodeError> {
-        let mut idx = 0;
-        if idx + 2 > buf.len() {
-            return Err(EncodeError::BufferTooSmall);
-        }
-        buf[idx..idx + 2].copy_from_slice(&self.weak_control_limit_value.to_le_bytes());
-        idx += 2;
-        if idx + 2 > buf.len() {
-            return Err(EncodeError::BufferTooSmall);
-        }
-        buf[idx..idx + 2].copy_from_slice(&self.voltage_threshold.to_le_bytes());
-        idx += 2;
-        if idx + 2 > buf.len() {
-            return Err(EncodeError::BufferTooSmall);
-        }
-        buf[idx..idx + 2].copy_from_slice(&self.angular_error_threshold.to_le_bytes());
-        idx += 2;
-        Ok(idx)
-    }
-    pub fn decode(data: &[u8]) -> Result<Self, DecodeError> {
-        let mut idx = 0;
-        if data.len() < idx + 2 {
-            return Err(DecodeError::NotEnoughBytes);
-        }
-        let weak_control_limit_value = i16::from_le_bytes(
-            data[idx..idx + 2]
-                .try_into()
-                .map_err(|_| DecodeError::ConversionError)?,
-        );
-        idx += 2;
-        if data.len() < idx + 2 {
-            return Err(DecodeError::NotEnoughBytes);
-        }
-        let voltage_threshold = i16::from_le_bytes(
-            data[idx..idx + 2]
-                .try_into()
-                .map_err(|_| DecodeError::ConversionError)?,
-        );
-        idx += 2;
-        if data.len() < idx + 2 {
-            return Err(DecodeError::NotEnoughBytes);
-        }
-        let angular_error_threshold = i16::from_le_bytes(
-            data[idx..idx + 2]
-                .try_into()
-                .map_err(|_| DecodeError::ConversionError)?,
-        );
-        idx += 2;
-        Ok(Self {
-            weak_control_limit_value,
-            voltage_threshold,
-            angular_error_threshold,
-        })
-    }
-}
-impl Default for SetWeakControlThresholdRequest {
-    fn default() -> Self {
-        Self::new(0, 0, 0)
-    }
-}
-
-/// Set threshold response
-/// CMD_ID: 0x29 | RESPONSE
-#[derive(Debug, Clone, PartialEq)]
-pub struct SetWeakControlThresholdResponse {
-    /// Success or Failure
-    pub status: BooleanStatus,
-}
-impl SetWeakControlThresholdResponse {
-    pub const CMD_ID: u8 = 0x29;
-    pub const IS_REQUEST: bool = false;
-    pub fn new(status: BooleanStatus) -> Self {
-        Self { status }
-    }
-    pub fn encode(&self, buf: &mut [u8]) -> Result<usize, EncodeError> {
-        let mut idx = 0;
-        if idx >= buf.len() {
-            return Err(EncodeError::BufferTooSmall);
-        }
-        buf[idx] = self.status as u8;
-        idx += 1;
-        Ok(idx)
-    }
-    pub fn decode(data: &[u8]) -> Result<Self, DecodeError> {
-        let mut idx = 0;
-        if idx >= data.len() {
-            return Err(DecodeError::NotEnoughBytes);
-        }
-        let status = BooleanStatus::from_u8(data[idx]).ok_or(DecodeError::InvalidEnumValue)?;
-        idx += 1;
-        Ok(Self { status })
-    }
-}
-impl Default for SetWeakControlThresholdResponse {
-    fn default() -> Self {
-        Self::new(BooleanStatus::default())
-    }
-}
-
-/// Request motor voltage
-/// CMD_ID: 0x2A | REQUEST
-#[derive(Debug, Clone, PartialEq)]
-pub struct MotorVoltageRequest {
-    _phantom: core::marker::PhantomData<()>,
-}
-impl MotorVoltageRequest {
-    pub const CMD_ID: u8 = 0x2A;
-    pub const IS_REQUEST: bool = true;
-    pub fn new() -> Self {
-        Self {
-            _phantom: core::marker::PhantomData,
-        }
-    }
-    pub fn encode(&self, buf: &mut [u8]) -> Result<usize, EncodeError> {
-        let mut idx = 0;
-        Ok(idx)
-    }
-    pub fn decode(data: &[u8]) -> Result<Self, DecodeError> {
-        Ok(Self {
-            _phantom: core::marker::PhantomData,
-        })
-    }
-}
-impl Default for MotorVoltageRequest {
-    fn default() -> Self {
-        Self::new()
-    }
-}
-
-/// Motor voltage data
-/// CMD_ID: 0x2A | RESPONSE
-#[derive(Debug, Clone, PartialEq)]
-pub struct MotorVoltageResponse {
-    /// Yaw motor voltage * 1000
-    pub yaw_voltage: i16,
-    /// Pitch motor voltage * 1000
-    pub pitch_voltage: i16,
-    /// Roll motor voltage * 1000
-    pub roll_voltage: i16,
-}
-impl MotorVoltageResponse {
-    pub const CMD_ID: u8 = 0x2A;
-    pub const IS_REQUEST: bool = false;
-    pub fn new(yaw_voltage: i16, pitch_voltage: i16, roll_voltage: i16) -> Self {
-        Self {
-            yaw_voltage,
-            pitch_voltage,
-            roll_voltage,
-        }
-    }
-    pub fn encode(&self, buf: &mut [u8]) -> Result<usize, EncodeError> {
-        let mut idx = 0;
-        if idx + 2 > buf.len() {
-            return Err(EncodeError::BufferTooSmall);
-        }
-        buf[idx..idx + 2].copy_from_slice(&self.yaw_voltage.to_le_bytes());
-        idx += 2;
-        if idx + 2 > buf.len() {
-            return Err(EncodeError::BufferTooSmall);
-        }
-        buf[idx..idx + 2].copy_from_slice(&self.pitch_voltage.to_le_bytes());
-        idx += 2;
-        if idx + 2 > buf.len() {
-            return Err(EncodeError::BufferTooSmall);
-        }
-        buf[idx..idx + 2].copy_from_slice(&self.roll_voltage.to_le_bytes());
-        idx += 2;
-        Ok(idx)
-    }
-    pub fn decode(data: &[u8]) -> Result<Self, DecodeError> {
-        let mut idx = 0;
-        if data.len() < idx + 2 {
-            return Err(DecodeError::NotEnoughBytes);
-        }
-        let yaw_voltage = i16::from_le_bytes(
-            data[idx..idx + 2]
-                .try_into()
-                .map_err(|_| DecodeError::ConversionError)?,
-        );
-        idx += 2;
-        if data.len() < idx + 2 {
-            return Err(DecodeError::NotEnoughBytes);
-        }
-        let pitch_voltage = i16::from_le_bytes(
-            data[idx..idx + 2]
-                .try_into()
-                .map_err(|_| DecodeError::ConversionError)?,
-        );
-        idx += 2;
-        if data.len() < idx + 2 {
-            return Err(DecodeError::NotEnoughBytes);
-        }
-        let roll_voltage = i16::from_le_bytes(
-            data[idx..idx + 2]
-                .try_into()
-                .map_err(|_| DecodeError::ConversionError)?,
-        );
-        idx += 2;
-        Ok(Self {
-            yaw_voltage,
-            pitch_voltage,
-            roll_voltage,
-        })
-    }
-}
-impl Default for MotorVoltageResponse {
-    fn default() -> Self {
-        Self::new(0, 0, 0)
-    }
-}
-
-/// Set UTC time
-/// CMD_ID: 0x30 | REQUEST
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, Copy, PartialEq)]
 pub struct SetUtcTimeRequest {
-    /// UNIX epoch time (microseconds)
     pub timestamp: u64,
 }
 impl SetUtcTimeRequest {
     pub const CMD_ID: u8 = 0x30;
     pub const IS_REQUEST: bool = true;
-    pub fn new(timestamp: u64) -> Self {
-        Self { timestamp }
-    }
     pub fn encode(&self, buf: &mut [u8]) -> Result<usize, EncodeError> {
         let mut idx = 0;
         if idx + 8 > buf.len() {
@@ -5407,23 +3685,16 @@ impl SetUtcTimeRequest {
 }
 impl Default for SetUtcTimeRequest {
     fn default() -> Self {
-        Self::new(0)
+        Self { timestamp: 0 }
     }
 }
-
-/// UTC time response
-/// CMD_ID: 0x30 | RESPONSE
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, Copy, PartialEq)]
 pub struct SetUtcTimeResponse {
-    /// Success or Invalid
     pub status: BooleanStatus,
 }
 impl SetUtcTimeResponse {
     pub const CMD_ID: u8 = 0x30;
     pub const IS_REQUEST: bool = false;
-    pub fn new(status: BooleanStatus) -> Self {
-        Self { status }
-    }
     pub fn encode(&self, buf: &mut [u8]) -> Result<usize, EncodeError> {
         let mut idx = 0;
         if idx >= buf.len() {
@@ -5445,197 +3716,37 @@ impl SetUtcTimeResponse {
 }
 impl Default for SetUtcTimeResponse {
     fn default() -> Self {
-        Self::new(BooleanStatus::default())
-    }
-}
-
-/// Request gimbal system information
-/// CMD_ID: 0x31 | REQUEST
-#[derive(Debug, Clone, PartialEq)]
-pub struct GimbalSystemInfoRequest {
-    _phantom: core::marker::PhantomData<()>,
-}
-impl GimbalSystemInfoRequest {
-    pub const CMD_ID: u8 = 0x31;
-    pub const IS_REQUEST: bool = true;
-    pub fn new() -> Self {
         Self {
-            _phantom: core::marker::PhantomData,
+            status: BooleanStatus::default(),
         }
     }
-    pub fn encode(&self, buf: &mut [u8]) -> Result<usize, EncodeError> {
-        let mut idx = 0;
-        Ok(idx)
-    }
-    pub fn decode(data: &[u8]) -> Result<Self, DecodeError> {
-        Ok(Self {
-            _phantom: core::marker::PhantomData,
-        })
-    }
 }
-impl Default for GimbalSystemInfoRequest {
-    fn default() -> Self {
-        Self::new()
-    }
-}
-
-/// Gimbal system info
-/// CMD_ID: 0x31 | RESPONSE
-#[derive(Debug, Clone, PartialEq)]
-pub struct GimbalSystemInfoResponse {
-    /// Laser enabled or disabled
-    pub laser_state: BooleanOnOff,
-}
-impl GimbalSystemInfoResponse {
-    pub const CMD_ID: u8 = 0x31;
-    pub const IS_REQUEST: bool = false;
-    pub fn new(laser_state: BooleanOnOff) -> Self {
-        Self { laser_state }
-    }
-    pub fn encode(&self, buf: &mut [u8]) -> Result<usize, EncodeError> {
-        let mut idx = 0;
-        if idx >= buf.len() {
-            return Err(EncodeError::BufferTooSmall);
-        }
-        buf[idx] = self.laser_state as u8;
-        idx += 1;
-        Ok(idx)
-    }
-    pub fn decode(data: &[u8]) -> Result<Self, DecodeError> {
-        let mut idx = 0;
-        if idx >= data.len() {
-            return Err(DecodeError::NotEnoughBytes);
-        }
-        let laser_state = BooleanOnOff::from_u8(data[idx]).ok_or(DecodeError::InvalidEnumValue)?;
-        idx += 1;
-        Ok(Self { laser_state })
-    }
-}
-impl Default for GimbalSystemInfoResponse {
-    fn default() -> Self {
-        Self::new(BooleanOnOff::default())
-    }
-}
-
-/// Set laser ranging state
-/// CMD_ID: 0x32 | REQUEST
-#[derive(Debug, Clone, PartialEq)]
-pub struct SetLaserStateRequest {
-    /// Enable or Disable
-    pub laser_state: BooleanOnOff,
-}
-impl SetLaserStateRequest {
-    pub const CMD_ID: u8 = 0x32;
-    pub const IS_REQUEST: bool = true;
-    pub fn new(laser_state: BooleanOnOff) -> Self {
-        Self { laser_state }
-    }
-    pub fn encode(&self, buf: &mut [u8]) -> Result<usize, EncodeError> {
-        let mut idx = 0;
-        if idx >= buf.len() {
-            return Err(EncodeError::BufferTooSmall);
-        }
-        buf[idx] = self.laser_state as u8;
-        idx += 1;
-        Ok(idx)
-    }
-    pub fn decode(data: &[u8]) -> Result<Self, DecodeError> {
-        let mut idx = 0;
-        if idx >= data.len() {
-            return Err(DecodeError::NotEnoughBytes);
-        }
-        let laser_state = BooleanOnOff::from_u8(data[idx]).ok_or(DecodeError::InvalidEnumValue)?;
-        idx += 1;
-        Ok(Self { laser_state })
-    }
-}
-impl Default for SetLaserStateRequest {
-    fn default() -> Self {
-        Self::new(BooleanOnOff::default())
-    }
-}
-
-/// Laser state response
-/// CMD_ID: 0x32 | RESPONSE
-#[derive(Debug, Clone, PartialEq)]
-pub struct SetLaserStateResponse {
-    /// Success or Failed
-    pub status: BooleanStatus,
-}
-impl SetLaserStateResponse {
-    pub const CMD_ID: u8 = 0x32;
-    pub const IS_REQUEST: bool = false;
-    pub fn new(status: BooleanStatus) -> Self {
-        Self { status }
-    }
-    pub fn encode(&self, buf: &mut [u8]) -> Result<usize, EncodeError> {
-        let mut idx = 0;
-        if idx >= buf.len() {
-            return Err(EncodeError::BufferTooSmall);
-        }
-        buf[idx] = self.status as u8;
-        idx += 1;
-        Ok(idx)
-    }
-    pub fn decode(data: &[u8]) -> Result<Self, DecodeError> {
-        let mut idx = 0;
-        if idx >= data.len() {
-            return Err(DecodeError::NotEnoughBytes);
-        }
-        let status = BooleanStatus::from_u8(data[idx]).ok_or(DecodeError::InvalidEnumValue)?;
-        idx += 1;
-        Ok(Self { status })
-    }
-}
-impl Default for SetLaserStateResponse {
-    fn default() -> Self {
-        Self::new(BooleanStatus::default())
-    }
-}
-
-/// Request thermal output mode
-/// CMD_ID: 0x33 | REQUEST
-#[derive(Debug, Clone, PartialEq)]
-pub struct ThermalOutputModeRequest {
-    _phantom: core::marker::PhantomData<()>,
-}
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct ThermalOutputModeRequest {}
 impl ThermalOutputModeRequest {
     pub const CMD_ID: u8 = 0x33;
     pub const IS_REQUEST: bool = true;
-    pub fn new() -> Self {
-        Self {
-            _phantom: core::marker::PhantomData,
-        }
-    }
     pub fn encode(&self, buf: &mut [u8]) -> Result<usize, EncodeError> {
         let mut idx = 0;
         Ok(idx)
     }
     pub fn decode(data: &[u8]) -> Result<Self, DecodeError> {
-        Ok(Self {
-            _phantom: core::marker::PhantomData,
-        })
+        let mut idx = 0;
+        Ok(Self {})
     }
 }
 impl Default for ThermalOutputModeRequest {
     fn default() -> Self {
-        Self::new()
+        Self {}
     }
 }
-
-/// Thermal output mode
-/// CMD_ID: 0x33 | RESPONSE
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, Copy, PartialEq)]
 pub struct ThermalOutputModeResponse {
-    /// Output mode
     pub mode: ThermalOutputMode,
 }
 impl ThermalOutputModeResponse {
     pub const CMD_ID: u8 = 0x33;
     pub const IS_REQUEST: bool = false;
-    pub fn new(mode: ThermalOutputMode) -> Self {
-        Self { mode }
-    }
     pub fn encode(&self, buf: &mut [u8]) -> Result<usize, EncodeError> {
         let mut idx = 0;
         if idx >= buf.len() {
@@ -5657,23 +3768,18 @@ impl ThermalOutputModeResponse {
 }
 impl Default for ThermalOutputModeResponse {
     fn default() -> Self {
-        Self::new(ThermalOutputMode::default())
+        Self {
+            mode: ThermalOutputMode::default(),
+        }
     }
 }
-
-/// Set thermal output mode
-/// CMD_ID: 0x34 | REQUEST
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, Copy, PartialEq)]
 pub struct SetThermalOutputModeRequest {
-    /// Output mode to set
     pub mode: ThermalOutputMode,
 }
 impl SetThermalOutputModeRequest {
     pub const CMD_ID: u8 = 0x34;
     pub const IS_REQUEST: bool = true;
-    pub fn new(mode: ThermalOutputMode) -> Self {
-        Self { mode }
-    }
     pub fn encode(&self, buf: &mut [u8]) -> Result<usize, EncodeError> {
         let mut idx = 0;
         if idx >= buf.len() {
@@ -5695,23 +3801,18 @@ impl SetThermalOutputModeRequest {
 }
 impl Default for SetThermalOutputModeRequest {
     fn default() -> Self {
-        Self::new(ThermalOutputMode::default())
+        Self {
+            mode: ThermalOutputMode::default(),
+        }
     }
 }
-
-/// Set thermal output mode response
-/// CMD_ID: 0x34 | RESPONSE
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, Copy, PartialEq)]
 pub struct SetThermalOutputModeResponse {
-    /// Confirmed mode
     pub mode: ThermalOutputMode,
 }
 impl SetThermalOutputModeResponse {
     pub const CMD_ID: u8 = 0x34;
     pub const IS_REQUEST: bool = false;
-    pub fn new(mode: ThermalOutputMode) -> Self {
-        Self { mode }
-    }
     pub fn encode(&self, buf: &mut [u8]) -> Result<usize, EncodeError> {
         let mut idx = 0;
         if idx >= buf.len() {
@@ -5733,53 +3834,37 @@ impl SetThermalOutputModeResponse {
 }
 impl Default for SetThermalOutputModeResponse {
     fn default() -> Self {
-        Self::new(ThermalOutputMode::default())
+        Self {
+            mode: ThermalOutputMode::default(),
+        }
     }
 }
-
-/// Get single temperature frame
-/// CMD_ID: 0x35 | REQUEST
-#[derive(Debug, Clone, PartialEq)]
-pub struct GetSingleTemperatureFrameRequest {
-    _phantom: core::marker::PhantomData<()>,
-}
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct GetSingleTemperatureFrameRequest {}
 impl GetSingleTemperatureFrameRequest {
     pub const CMD_ID: u8 = 0x35;
     pub const IS_REQUEST: bool = true;
-    pub fn new() -> Self {
-        Self {
-            _phantom: core::marker::PhantomData,
-        }
-    }
     pub fn encode(&self, buf: &mut [u8]) -> Result<usize, EncodeError> {
         let mut idx = 0;
         Ok(idx)
     }
     pub fn decode(data: &[u8]) -> Result<Self, DecodeError> {
-        Ok(Self {
-            _phantom: core::marker::PhantomData,
-        })
+        let mut idx = 0;
+        Ok(Self {})
     }
 }
 impl Default for GetSingleTemperatureFrameRequest {
     fn default() -> Self {
-        Self::new()
+        Self {}
     }
 }
-
-/// Single temperature frame response
-/// CMD_ID: 0x35 | RESPONSE
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, Copy, PartialEq)]
 pub struct GetSingleTemperatureFrameResponse {
-    /// Acquisition successful or failed
     pub ack: BooleanStatus,
 }
 impl GetSingleTemperatureFrameResponse {
     pub const CMD_ID: u8 = 0x35;
     pub const IS_REQUEST: bool = false;
-    pub fn new(ack: BooleanStatus) -> Self {
-        Self { ack }
-    }
     pub fn encode(&self, buf: &mut [u8]) -> Result<usize, EncodeError> {
         let mut idx = 0;
         if idx >= buf.len() {
@@ -5801,53 +3886,37 @@ impl GetSingleTemperatureFrameResponse {
 }
 impl Default for GetSingleTemperatureFrameResponse {
     fn default() -> Self {
-        Self::new(BooleanStatus::default())
+        Self {
+            ack: BooleanStatus::default(),
+        }
     }
 }
-
-/// Request thermal gain mode
-/// CMD_ID: 0x37 | REQUEST
-#[derive(Debug, Clone, PartialEq)]
-pub struct ThermalGainModeRequest {
-    _phantom: core::marker::PhantomData<()>,
-}
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct ThermalGainModeRequest {}
 impl ThermalGainModeRequest {
     pub const CMD_ID: u8 = 0x37;
     pub const IS_REQUEST: bool = true;
-    pub fn new() -> Self {
-        Self {
-            _phantom: core::marker::PhantomData,
-        }
-    }
     pub fn encode(&self, buf: &mut [u8]) -> Result<usize, EncodeError> {
         let mut idx = 0;
         Ok(idx)
     }
     pub fn decode(data: &[u8]) -> Result<Self, DecodeError> {
-        Ok(Self {
-            _phantom: core::marker::PhantomData,
-        })
+        let mut idx = 0;
+        Ok(Self {})
     }
 }
 impl Default for ThermalGainModeRequest {
     fn default() -> Self {
-        Self::new()
+        Self {}
     }
 }
-
-/// Thermal gain mode
-/// CMD_ID: 0x37 | RESPONSE
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, Copy, PartialEq)]
 pub struct ThermalGainModeResponse {
-    /// Current gain mode
     pub ir_gain: ThermalGainMode,
 }
 impl ThermalGainModeResponse {
     pub const CMD_ID: u8 = 0x37;
     pub const IS_REQUEST: bool = false;
-    pub fn new(ir_gain: ThermalGainMode) -> Self {
-        Self { ir_gain }
-    }
     pub fn encode(&self, buf: &mut [u8]) -> Result<usize, EncodeError> {
         let mut idx = 0;
         if idx >= buf.len() {
@@ -5869,23 +3938,18 @@ impl ThermalGainModeResponse {
 }
 impl Default for ThermalGainModeResponse {
     fn default() -> Self {
-        Self::new(ThermalGainMode::default())
+        Self {
+            ir_gain: ThermalGainMode::default(),
+        }
     }
 }
-
-/// Set thermal gain mode
-/// CMD_ID: 0x38 | REQUEST
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, Copy, PartialEq)]
 pub struct SetThermalGainModeRequest {
-    /// Gain mode to set
     pub ir_gain: ThermalGainMode,
 }
 impl SetThermalGainModeRequest {
     pub const CMD_ID: u8 = 0x38;
     pub const IS_REQUEST: bool = true;
-    pub fn new(ir_gain: ThermalGainMode) -> Self {
-        Self { ir_gain }
-    }
     pub fn encode(&self, buf: &mut [u8]) -> Result<usize, EncodeError> {
         let mut idx = 0;
         if idx >= buf.len() {
@@ -5907,23 +3971,18 @@ impl SetThermalGainModeRequest {
 }
 impl Default for SetThermalGainModeRequest {
     fn default() -> Self {
-        Self::new(ThermalGainMode::default())
+        Self {
+            ir_gain: ThermalGainMode::default(),
+        }
     }
 }
-
-/// Set thermal gain mode response
-/// CMD_ID: 0x38 | RESPONSE
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, Copy, PartialEq)]
 pub struct SetThermalGainModeResponse {
-    /// Confirmed gain mode
     pub ir_gain: ThermalGainMode,
 }
 impl SetThermalGainModeResponse {
     pub const CMD_ID: u8 = 0x38;
     pub const IS_REQUEST: bool = false;
-    pub fn new(ir_gain: ThermalGainMode) -> Self {
-        Self { ir_gain }
-    }
     pub fn encode(&self, buf: &mut [u8]) -> Result<usize, EncodeError> {
         let mut idx = 0;
         if idx >= buf.len() {
@@ -5945,67 +4004,41 @@ impl SetThermalGainModeResponse {
 }
 impl Default for SetThermalGainModeResponse {
     fn default() -> Self {
-        Self::new(ThermalGainMode::default())
+        Self {
+            ir_gain: ThermalGainMode::default(),
+        }
     }
 }
-
-/// Request thermal env correction params
-/// CMD_ID: 0x39 | REQUEST
-#[derive(Debug, Clone, PartialEq)]
-pub struct ThermalEnvCorrectionParamsRequest {
-    _phantom: core::marker::PhantomData<()>,
-}
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct ThermalEnvCorrectionParamsRequest {}
 impl ThermalEnvCorrectionParamsRequest {
     pub const CMD_ID: u8 = 0x39;
     pub const IS_REQUEST: bool = true;
-    pub fn new() -> Self {
-        Self {
-            _phantom: core::marker::PhantomData,
-        }
-    }
     pub fn encode(&self, buf: &mut [u8]) -> Result<usize, EncodeError> {
         let mut idx = 0;
         Ok(idx)
     }
     pub fn decode(data: &[u8]) -> Result<Self, DecodeError> {
-        Ok(Self {
-            _phantom: core::marker::PhantomData,
-        })
+        let mut idx = 0;
+        Ok(Self {})
     }
 }
 impl Default for ThermalEnvCorrectionParamsRequest {
     fn default() -> Self {
-        Self::new()
+        Self {}
     }
 }
-
-/// Thermal env correction params
-/// CMD_ID: 0x39 | RESPONSE
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, Copy, PartialEq)]
 pub struct ThermalEnvCorrectionParamsResponse {
-    /// Distance (m) * 100
     pub dist: u16,
-    /// Target emissivity (%) * 100
     pub ems: u16,
-    /// Environmental humidity (%) * 100
     pub hum: u16,
-    /// Atmospheric temperature (°C) * 100
     pub ta: u16,
-    /// Reflective temperature (°C) * 100
     pub tu: u16,
 }
 impl ThermalEnvCorrectionParamsResponse {
     pub const CMD_ID: u8 = 0x39;
     pub const IS_REQUEST: bool = false;
-    pub fn new(dist: u16, ems: u16, hum: u16, ta: u16, tu: u16) -> Self {
-        Self {
-            dist,
-            ems,
-            hum,
-            ta,
-            tu,
-        }
-    }
     pub fn encode(&self, buf: &mut [u8]) -> Result<usize, EncodeError> {
         let mut idx = 0;
         if idx + 2 > buf.len() {
@@ -6093,37 +4126,26 @@ impl ThermalEnvCorrectionParamsResponse {
 }
 impl Default for ThermalEnvCorrectionParamsResponse {
     fn default() -> Self {
-        Self::new(0, 0, 0, 0, 0)
+        Self {
+            dist: 0,
+            ems: 0,
+            hum: 0,
+            ta: 0,
+            tu: 0,
+        }
     }
 }
-
-/// Set thermal env correction params
-/// CMD_ID: 0x3A | REQUEST
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, Copy, PartialEq)]
 pub struct SetThermalEnvCorrectionParamsRequest {
-    /// Distance (m) * 100
     pub dist: u16,
-    /// Target emissivity (%) * 100
     pub ems: u16,
-    /// Environmental humidity (%) * 100
     pub hum: u16,
-    /// Atmospheric temperature (°C) * 100
     pub ta: u16,
-    /// Reflective temperature (°C) * 100
     pub tu: u16,
 }
 impl SetThermalEnvCorrectionParamsRequest {
     pub const CMD_ID: u8 = 0x3A;
     pub const IS_REQUEST: bool = true;
-    pub fn new(dist: u16, ems: u16, hum: u16, ta: u16, tu: u16) -> Self {
-        Self {
-            dist,
-            ems,
-            hum,
-            ta,
-            tu,
-        }
-    }
     pub fn encode(&self, buf: &mut [u8]) -> Result<usize, EncodeError> {
         let mut idx = 0;
         if idx + 2 > buf.len() {
@@ -6211,23 +4233,22 @@ impl SetThermalEnvCorrectionParamsRequest {
 }
 impl Default for SetThermalEnvCorrectionParamsRequest {
     fn default() -> Self {
-        Self::new(0, 0, 0, 0, 0)
+        Self {
+            dist: 0,
+            ems: 0,
+            hum: 0,
+            ta: 0,
+            tu: 0,
+        }
     }
 }
-
-/// Set env correction params response
-/// CMD_ID: 0x3A | RESPONSE
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, Copy, PartialEq)]
 pub struct SetThermalEnvCorrectionParamsResponse {
-    /// Successfully set or failed
     pub ack: BooleanStatus,
 }
 impl SetThermalEnvCorrectionParamsResponse {
     pub const CMD_ID: u8 = 0x3A;
     pub const IS_REQUEST: bool = false;
-    pub fn new(ack: BooleanStatus) -> Self {
-        Self { ack }
-    }
     pub fn encode(&self, buf: &mut [u8]) -> Result<usize, EncodeError> {
         let mut idx = 0;
         if idx >= buf.len() {
@@ -6249,53 +4270,37 @@ impl SetThermalEnvCorrectionParamsResponse {
 }
 impl Default for SetThermalEnvCorrectionParamsResponse {
     fn default() -> Self {
-        Self::new(BooleanStatus::default())
+        Self {
+            ack: BooleanStatus::default(),
+        }
     }
 }
-
-/// Request env correction switch
-/// CMD_ID: 0x3B | REQUEST
-#[derive(Debug, Clone, PartialEq)]
-pub struct ThermalEnvCorrectionSwitchRequest {
-    _phantom: core::marker::PhantomData<()>,
-}
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct ThermalEnvCorrectionSwitchRequest {}
 impl ThermalEnvCorrectionSwitchRequest {
     pub const CMD_ID: u8 = 0x3B;
     pub const IS_REQUEST: bool = true;
-    pub fn new() -> Self {
-        Self {
-            _phantom: core::marker::PhantomData,
-        }
-    }
     pub fn encode(&self, buf: &mut [u8]) -> Result<usize, EncodeError> {
         let mut idx = 0;
         Ok(idx)
     }
     pub fn decode(data: &[u8]) -> Result<Self, DecodeError> {
-        Ok(Self {
-            _phantom: core::marker::PhantomData,
-        })
+        let mut idx = 0;
+        Ok(Self {})
     }
 }
 impl Default for ThermalEnvCorrectionSwitchRequest {
     fn default() -> Self {
-        Self::new()
+        Self {}
     }
 }
-
-/// Env correction switch
-/// CMD_ID: 0x3B | RESPONSE
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, Copy, PartialEq)]
 pub struct ThermalEnvCorrectionSwitchResponse {
-    /// Off or On
     pub env_correct: BooleanOnOff,
 }
 impl ThermalEnvCorrectionSwitchResponse {
     pub const CMD_ID: u8 = 0x3B;
     pub const IS_REQUEST: bool = false;
-    pub fn new(env_correct: BooleanOnOff) -> Self {
-        Self { env_correct }
-    }
     pub fn encode(&self, buf: &mut [u8]) -> Result<usize, EncodeError> {
         let mut idx = 0;
         if idx >= buf.len() {
@@ -6317,23 +4322,18 @@ impl ThermalEnvCorrectionSwitchResponse {
 }
 impl Default for ThermalEnvCorrectionSwitchResponse {
     fn default() -> Self {
-        Self::new(BooleanOnOff::default())
+        Self {
+            env_correct: BooleanOnOff::default(),
+        }
     }
 }
-
-/// Set env correction switch
-/// CMD_ID: 0x3C | REQUEST
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, Copy, PartialEq)]
 pub struct SetThermalEnvCorrectionSwitchRequest {
-    /// Off or On
     pub env_correct: BooleanOnOff,
 }
 impl SetThermalEnvCorrectionSwitchRequest {
     pub const CMD_ID: u8 = 0x3C;
     pub const IS_REQUEST: bool = true;
-    pub fn new(env_correct: BooleanOnOff) -> Self {
-        Self { env_correct }
-    }
     pub fn encode(&self, buf: &mut [u8]) -> Result<usize, EncodeError> {
         let mut idx = 0;
         if idx >= buf.len() {
@@ -6355,23 +4355,18 @@ impl SetThermalEnvCorrectionSwitchRequest {
 }
 impl Default for SetThermalEnvCorrectionSwitchRequest {
     fn default() -> Self {
-        Self::new(BooleanOnOff::default())
+        Self {
+            env_correct: BooleanOnOff::default(),
+        }
     }
 }
-
-/// Set env correction switch response
-/// CMD_ID: 0x3C | RESPONSE
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, Copy, PartialEq)]
 pub struct SetThermalEnvCorrectionSwitchResponse {
-    /// Off or On
     pub env_correct: BooleanOnOff,
 }
 impl SetThermalEnvCorrectionSwitchResponse {
     pub const CMD_ID: u8 = 0x3C;
     pub const IS_REQUEST: bool = false;
-    pub fn new(env_correct: BooleanOnOff) -> Self {
-        Self { env_correct }
-    }
     pub fn encode(&self, buf: &mut [u8]) -> Result<usize, EncodeError> {
         let mut idx = 0;
         if idx >= buf.len() {
@@ -6393,55 +4388,25 @@ impl SetThermalEnvCorrectionSwitchResponse {
 }
 impl Default for SetThermalEnvCorrectionSwitchResponse {
     fn default() -> Self {
-        Self::new(BooleanOnOff::default())
+        Self {
+            env_correct: BooleanOnOff::default(),
+        }
     }
 }
-
-/// Send GPS raw data to gimbal
-/// CMD_ID: 0x3E | REQUEST
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, Copy, PartialEq)]
 pub struct SendGpsData {
-    /// Time since boot (ms)
     pub time_boot_ms: u32,
-    /// Latitude [degE7]
     pub lat: i32,
-    /// Longitude [degE7]
     pub lon: i32,
-    /// Altitude MSL (cm)
     pub alt: i32,
-    /// Altitude above WGS84 (cm)
     pub alt_ellipsoid: i32,
-    /// X Speed [m*1000/s]
     pub vn: i32,
-    /// Y Speed [m*1000/s]
     pub ve: i32,
-    /// Z Speed [m*1000/s]
     pub vd: i32,
 }
 impl SendGpsData {
     pub const CMD_ID: u8 = 0x3E;
     pub const IS_REQUEST: bool = true;
-    pub fn new(
-        time_boot_ms: u32,
-        lat: i32,
-        lon: i32,
-        alt: i32,
-        alt_ellipsoid: i32,
-        vn: i32,
-        ve: i32,
-        vd: i32,
-    ) -> Self {
-        Self {
-            time_boot_ms,
-            lat,
-            lon,
-            alt,
-            alt_ellipsoid,
-            vn,
-            ve,
-            vd,
-        }
-    }
     pub fn encode(&self, buf: &mut [u8]) -> Result<usize, EncodeError> {
         let mut idx = 0;
         if idx + 4 > buf.len() {
@@ -6574,58 +4539,45 @@ impl SendGpsData {
 }
 impl Default for SendGpsData {
     fn default() -> Self {
-        Self::new(0, 0, 0, 0, 0, 0, 0, 0)
+        Self {
+            time_boot_ms: 0,
+            lat: 0,
+            lon: 0,
+            alt: 0,
+            alt_ellipsoid: 0,
+            vn: 0,
+            ve: 0,
+            vd: 0,
+        }
     }
 }
-
-/// Request system time
-/// CMD_ID: 0x40 | REQUEST
-#[derive(Debug, Clone, PartialEq)]
-pub struct SystemTimeRequest {
-    _phantom: core::marker::PhantomData<()>,
-}
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct SystemTimeRequest {}
 impl SystemTimeRequest {
     pub const CMD_ID: u8 = 0x40;
     pub const IS_REQUEST: bool = true;
-    pub fn new() -> Self {
-        Self {
-            _phantom: core::marker::PhantomData,
-        }
-    }
     pub fn encode(&self, buf: &mut [u8]) -> Result<usize, EncodeError> {
         let mut idx = 0;
         Ok(idx)
     }
     pub fn decode(data: &[u8]) -> Result<Self, DecodeError> {
-        Ok(Self {
-            _phantom: core::marker::PhantomData,
-        })
+        let mut idx = 0;
+        Ok(Self {})
     }
 }
 impl Default for SystemTimeRequest {
     fn default() -> Self {
-        Self::new()
+        Self {}
     }
 }
-
-/// System time
-/// CMD_ID: 0x40 | RESPONSE
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, Copy, PartialEq)]
 pub struct SystemTimeResponse {
-    /// UNIX epoch time (μs)
     pub time_unix_usec: u64,
-    /// Time since system startup (ms)
     pub time_boot_ms: u32,
 }
 impl SystemTimeResponse {
     pub const CMD_ID: u8 = 0x40;
     pub const IS_REQUEST: bool = false;
-    pub fn new(time_unix_usec: u64, time_boot_ms: u32) -> Self {
-        Self {
-            time_unix_usec,
-            time_boot_ms,
-        }
-    }
     pub fn encode(&self, buf: &mut [u8]) -> Result<usize, EncodeError> {
         let mut idx = 0;
         if idx + 8 > buf.len() {
@@ -6668,28 +4620,20 @@ impl SystemTimeResponse {
 }
 impl Default for SystemTimeResponse {
     fn default() -> Self {
-        Self::new(0, 0)
+        Self {
+            time_unix_usec: 0,
+            time_boot_ms: 0,
+        }
     }
 }
-
-/// Set single-axis attitude angle
-/// CMD_ID: 0x41 | REQUEST
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, Copy, PartialEq)]
 pub struct SingleAxisAttitudeRequest {
-    /// Target angle * 10
     pub angle: i16,
-    /// Axis to control
     pub single_control_flag: SingleAxisControl,
 }
 impl SingleAxisAttitudeRequest {
     pub const CMD_ID: u8 = 0x41;
     pub const IS_REQUEST: bool = true;
-    pub fn new(angle: i16, single_control_flag: SingleAxisControl) -> Self {
-        Self {
-            angle,
-            single_control_flag,
-        }
-    }
     pub fn encode(&self, buf: &mut [u8]) -> Result<usize, EncodeError> {
         let mut idx = 0;
         if idx + 2 > buf.len() {
@@ -6729,27 +4673,21 @@ impl SingleAxisAttitudeRequest {
 }
 impl Default for SingleAxisAttitudeRequest {
     fn default() -> Self {
-        Self::new(0, SingleAxisControl::default())
+        Self {
+            angle: 0,
+            single_control_flag: SingleAxisControl::default(),
+        }
     }
 }
-
-/// Single-axis attitude response
-/// CMD_ID: 0x41 | RESPONSE
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, Copy, PartialEq)]
 pub struct SingleAxisAttitudeResponse {
-    /// Current yaw * 10
     pub yaw: i16,
-    /// Current pitch * 10
     pub pitch: i16,
-    /// Current roll * 10
     pub roll: i16,
 }
 impl SingleAxisAttitudeResponse {
     pub const CMD_ID: u8 = 0x41;
     pub const IS_REQUEST: bool = false;
-    pub fn new(yaw: i16, pitch: i16, roll: i16) -> Self {
-        Self { yaw, pitch, roll }
-    }
     pub fn encode(&self, buf: &mut [u8]) -> Result<usize, EncodeError> {
         let mut idx = 0;
         if idx + 2 > buf.len() {
@@ -6803,53 +4741,39 @@ impl SingleAxisAttitudeResponse {
 }
 impl Default for SingleAxisAttitudeResponse {
     fn default() -> Self {
-        Self::new(0, 0, 0)
+        Self {
+            yaw: 0,
+            pitch: 0,
+            roll: 0,
+        }
     }
 }
-
-/// Request thermal threshold switch
-/// CMD_ID: 0x42 | REQUEST
-#[derive(Debug, Clone, PartialEq)]
-pub struct ThermalThresholdSwitchRequest {
-    _phantom: core::marker::PhantomData<()>,
-}
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct ThermalThresholdSwitchRequest {}
 impl ThermalThresholdSwitchRequest {
     pub const CMD_ID: u8 = 0x42;
     pub const IS_REQUEST: bool = true;
-    pub fn new() -> Self {
-        Self {
-            _phantom: core::marker::PhantomData,
-        }
-    }
     pub fn encode(&self, buf: &mut [u8]) -> Result<usize, EncodeError> {
         let mut idx = 0;
         Ok(idx)
     }
     pub fn decode(data: &[u8]) -> Result<Self, DecodeError> {
-        Ok(Self {
-            _phantom: core::marker::PhantomData,
-        })
+        let mut idx = 0;
+        Ok(Self {})
     }
 }
 impl Default for ThermalThresholdSwitchRequest {
     fn default() -> Self {
-        Self::new()
+        Self {}
     }
 }
-
-/// Thermal threshold switch
-/// CMD_ID: 0x42 | RESPONSE
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, Copy, PartialEq)]
 pub struct ThermalThresholdSwitchResponse {
-    /// Off or On
     pub ir_thresh_sta: BooleanOnOff,
 }
 impl ThermalThresholdSwitchResponse {
     pub const CMD_ID: u8 = 0x42;
     pub const IS_REQUEST: bool = false;
-    pub fn new(ir_thresh_sta: BooleanOnOff) -> Self {
-        Self { ir_thresh_sta }
-    }
     pub fn encode(&self, buf: &mut [u8]) -> Result<usize, EncodeError> {
         let mut idx = 0;
         if idx >= buf.len() {
@@ -6872,23 +4796,18 @@ impl ThermalThresholdSwitchResponse {
 }
 impl Default for ThermalThresholdSwitchResponse {
     fn default() -> Self {
-        Self::new(BooleanOnOff::default())
+        Self {
+            ir_thresh_sta: BooleanOnOff::default(),
+        }
     }
 }
-
-/// Set thermal threshold switch
-/// CMD_ID: 0x43 | REQUEST
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, Copy, PartialEq)]
 pub struct SetThermalThresholdSwitchRequest {
-    /// Off or On
     pub ir_thresh_sta: BooleanOnOff,
 }
 impl SetThermalThresholdSwitchRequest {
     pub const CMD_ID: u8 = 0x43;
     pub const IS_REQUEST: bool = true;
-    pub fn new(ir_thresh_sta: BooleanOnOff) -> Self {
-        Self { ir_thresh_sta }
-    }
     pub fn encode(&self, buf: &mut [u8]) -> Result<usize, EncodeError> {
         let mut idx = 0;
         if idx >= buf.len() {
@@ -6911,23 +4830,18 @@ impl SetThermalThresholdSwitchRequest {
 }
 impl Default for SetThermalThresholdSwitchRequest {
     fn default() -> Self {
-        Self::new(BooleanOnOff::default())
+        Self {
+            ir_thresh_sta: BooleanOnOff::default(),
+        }
     }
 }
-
-/// Set thermal threshold switch response
-/// CMD_ID: 0x43 | RESPONSE
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, Copy, PartialEq)]
 pub struct SetThermalThresholdSwitchResponse {
-    /// Off or On
     pub ir_thresh_sta: BooleanOnOff,
 }
 impl SetThermalThresholdSwitchResponse {
     pub const CMD_ID: u8 = 0x43;
     pub const IS_REQUEST: bool = false;
-    pub fn new(ir_thresh_sta: BooleanOnOff) -> Self {
-        Self { ir_thresh_sta }
-    }
     pub fn encode(&self, buf: &mut [u8]) -> Result<usize, EncodeError> {
         let mut idx = 0;
         if idx >= buf.len() {
@@ -6950,125 +4864,54 @@ impl SetThermalThresholdSwitchResponse {
 }
 impl Default for SetThermalThresholdSwitchResponse {
     fn default() -> Self {
-        Self::new(BooleanOnOff::default())
+        Self {
+            ir_thresh_sta: BooleanOnOff::default(),
+        }
     }
 }
-
-/// Request thermal threshold params
-/// CMD_ID: 0x44 | REQUEST
-#[derive(Debug, Clone, PartialEq)]
-pub struct ThermalThresholdParamsRequest {
-    _phantom: core::marker::PhantomData<()>,
-}
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct ThermalThresholdParamsRequest {}
 impl ThermalThresholdParamsRequest {
     pub const CMD_ID: u8 = 0x44;
     pub const IS_REQUEST: bool = true;
-    pub fn new() -> Self {
-        Self {
-            _phantom: core::marker::PhantomData,
-        }
-    }
     pub fn encode(&self, buf: &mut [u8]) -> Result<usize, EncodeError> {
         let mut idx = 0;
         Ok(idx)
     }
     pub fn decode(data: &[u8]) -> Result<Self, DecodeError> {
-        Ok(Self {
-            _phantom: core::marker::PhantomData,
-        })
+        let mut idx = 0;
+        Ok(Self {})
     }
 }
 impl Default for ThermalThresholdParamsRequest {
     fn default() -> Self {
-        Self::new()
+        Self {}
     }
 }
-
-/// Thermal threshold params
-/// CMD_ID: 0x44 | RESPONSE
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, Copy, PartialEq)]
 pub struct ThermalThresholdParamsResponse {
-    /// Threshold region 1: hide or display
     pub thresh1_switch: BooleanOnOff,
-    /// Threshold 1 min temp
     pub thresh1_temp_min: i16,
-    /// Threshold 1 max temp
     pub thresh1_temp_max: i16,
-    /// Threshold 1 color R
     pub thresh1_color_r: u8,
-    /// Threshold 1 color G
     pub thresh1_color_g: u8,
-    /// Threshold 1 color B
     pub thresh1_color_b: u8,
-    /// Threshold region 2: hide or display
     pub thresh2_switch: BooleanOnOff,
-    /// Threshold 2 min temp
     pub thresh2_temp_min: i16,
-    /// Threshold 2 max temp
     pub thresh2_temp_max: i16,
-    /// Threshold 2 color R
     pub thresh2_color_r: u8,
-    /// Threshold 2 color G
     pub thresh2_color_g: u8,
-    /// Threshold 2 color B
     pub thresh2_color_b: u8,
-    /// Threshold region 3: hide or display
     pub thresh3_switch: BooleanOnOff,
-    /// Threshold 3 min temp
     pub thresh3_temp_min: i16,
-    /// Threshold 3 max temp
     pub thresh3_temp_max: i16,
-    /// Threshold 3 color R
     pub thresh3_color_r: u8,
-    /// Threshold 3 color G
     pub thresh3_color_g: u8,
-    /// Threshold 3 color B
     pub thresh3_color_b: u8,
 }
 impl ThermalThresholdParamsResponse {
     pub const CMD_ID: u8 = 0x44;
     pub const IS_REQUEST: bool = false;
-    pub fn new(
-        thresh1_switch: BooleanOnOff,
-        thresh1_temp_min: i16,
-        thresh1_temp_max: i16,
-        thresh1_color_r: u8,
-        thresh1_color_g: u8,
-        thresh1_color_b: u8,
-        thresh2_switch: BooleanOnOff,
-        thresh2_temp_min: i16,
-        thresh2_temp_max: i16,
-        thresh2_color_r: u8,
-        thresh2_color_g: u8,
-        thresh2_color_b: u8,
-        thresh3_switch: BooleanOnOff,
-        thresh3_temp_min: i16,
-        thresh3_temp_max: i16,
-        thresh3_color_r: u8,
-        thresh3_color_g: u8,
-        thresh3_color_b: u8,
-    ) -> Self {
-        Self {
-            thresh1_switch,
-            thresh1_temp_min,
-            thresh1_temp_max,
-            thresh1_color_r,
-            thresh1_color_g,
-            thresh1_color_b,
-            thresh2_switch,
-            thresh2_temp_min,
-            thresh2_temp_max,
-            thresh2_color_r,
-            thresh2_color_g,
-            thresh2_color_b,
-            thresh3_switch,
-            thresh3_temp_min,
-            thresh3_temp_max,
-            thresh3_color_r,
-            thresh3_color_g,
-            thresh3_color_b,
-        }
-    }
     pub fn encode(&self, buf: &mut [u8]) -> Result<usize, EncodeError> {
         let mut idx = 0;
         if idx >= buf.len() {
@@ -7342,114 +5185,52 @@ impl ThermalThresholdParamsResponse {
 }
 impl Default for ThermalThresholdParamsResponse {
     fn default() -> Self {
-        Self::new(
-            BooleanOnOff::default(),
-            0,
-            0,
-            0,
-            0,
-            0,
-            BooleanOnOff::default(),
-            0,
-            0,
-            0,
-            0,
-            0,
-            BooleanOnOff::default(),
-            0,
-            0,
-            0,
-            0,
-            0,
-        )
+        Self {
+            thresh1_switch: BooleanOnOff::default(),
+            thresh1_temp_min: 0,
+            thresh1_temp_max: 0,
+            thresh1_color_r: 0,
+            thresh1_color_g: 0,
+            thresh1_color_b: 0,
+            thresh2_switch: BooleanOnOff::default(),
+            thresh2_temp_min: 0,
+            thresh2_temp_max: 0,
+            thresh2_color_r: 0,
+            thresh2_color_g: 0,
+            thresh2_color_b: 0,
+            thresh3_switch: BooleanOnOff::default(),
+            thresh3_temp_min: 0,
+            thresh3_temp_max: 0,
+            thresh3_color_r: 0,
+            thresh3_color_g: 0,
+            thresh3_color_b: 0,
+        }
     }
 }
-
-/// Set thermal threshold params
-/// CMD_ID: 0x45 | REQUEST
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, Copy, PartialEq)]
 pub struct SetThermalThresholdParamsRequest {
-    /// Threshold region 1: hide or display
     pub thresh1_switch: BooleanOnOff,
-    /// Threshold 1 min temp
     pub thresh1_temp_min: i16,
-    /// Threshold 1 max temp
     pub thresh1_temp_max: i16,
-    /// Threshold 1 color R
     pub thresh1_color_r: u8,
-    /// Threshold 1 color G
     pub thresh1_color_g: u8,
-    /// Threshold 1 color B
     pub thresh1_color_b: u8,
-    /// Threshold region 2: hide or display
     pub thresh2_switch: BooleanOnOff,
-    /// Threshold 2 min temp
     pub thresh2_temp_min: i16,
-    /// Threshold 2 max temp
     pub thresh2_temp_max: i16,
-    /// Threshold 2 color R
     pub thresh2_color_r: u8,
-    /// Threshold 2 color G
     pub thresh2_color_g: u8,
-    /// Threshold 2 color B
     pub thresh2_color_b: u8,
-    /// Threshold region 3: hide or display
     pub thresh3_switch: BooleanOnOff,
-    /// Threshold 3 min temp
     pub thresh3_temp_min: i16,
-    /// Threshold 3 max temp
     pub thresh3_temp_max: i16,
-    /// Threshold 3 color R
     pub thresh3_color_r: u8,
-    /// Threshold 3 color G
     pub thresh3_color_g: u8,
-    /// Threshold 3 color B
     pub thresh3_color_b: u8,
 }
 impl SetThermalThresholdParamsRequest {
     pub const CMD_ID: u8 = 0x45;
     pub const IS_REQUEST: bool = true;
-    pub fn new(
-        thresh1_switch: BooleanOnOff,
-        thresh1_temp_min: i16,
-        thresh1_temp_max: i16,
-        thresh1_color_r: u8,
-        thresh1_color_g: u8,
-        thresh1_color_b: u8,
-        thresh2_switch: BooleanOnOff,
-        thresh2_temp_min: i16,
-        thresh2_temp_max: i16,
-        thresh2_color_r: u8,
-        thresh2_color_g: u8,
-        thresh2_color_b: u8,
-        thresh3_switch: BooleanOnOff,
-        thresh3_temp_min: i16,
-        thresh3_temp_max: i16,
-        thresh3_color_r: u8,
-        thresh3_color_g: u8,
-        thresh3_color_b: u8,
-    ) -> Self {
-        Self {
-            thresh1_switch,
-            thresh1_temp_min,
-            thresh1_temp_max,
-            thresh1_color_r,
-            thresh1_color_g,
-            thresh1_color_b,
-            thresh2_switch,
-            thresh2_temp_min,
-            thresh2_temp_max,
-            thresh2_color_r,
-            thresh2_color_g,
-            thresh2_color_b,
-            thresh3_switch,
-            thresh3_temp_min,
-            thresh3_temp_max,
-            thresh3_color_r,
-            thresh3_color_g,
-            thresh3_color_b,
-        }
-    }
     pub fn encode(&self, buf: &mut [u8]) -> Result<usize, EncodeError> {
         let mut idx = 0;
         if idx >= buf.len() {
@@ -7723,42 +5504,35 @@ impl SetThermalThresholdParamsRequest {
 }
 impl Default for SetThermalThresholdParamsRequest {
     fn default() -> Self {
-        Self::new(
-            BooleanOnOff::default(),
-            0,
-            0,
-            0,
-            0,
-            0,
-            BooleanOnOff::default(),
-            0,
-            0,
-            0,
-            0,
-            0,
-            BooleanOnOff::default(),
-            0,
-            0,
-            0,
-            0,
-            0,
-        )
+        Self {
+            thresh1_switch: BooleanOnOff::default(),
+            thresh1_temp_min: 0,
+            thresh1_temp_max: 0,
+            thresh1_color_r: 0,
+            thresh1_color_g: 0,
+            thresh1_color_b: 0,
+            thresh2_switch: BooleanOnOff::default(),
+            thresh2_temp_min: 0,
+            thresh2_temp_max: 0,
+            thresh2_color_r: 0,
+            thresh2_color_g: 0,
+            thresh2_color_b: 0,
+            thresh3_switch: BooleanOnOff::default(),
+            thresh3_temp_min: 0,
+            thresh3_temp_max: 0,
+            thresh3_color_r: 0,
+            thresh3_color_g: 0,
+            thresh3_color_b: 0,
+        }
     }
 }
-
-/// Set thermal threshold params response
-/// CMD_ID: 0x45 | RESPONSE
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, Copy, PartialEq)]
 pub struct SetThermalThresholdParamsResponse {
-    /// Success or failed
     pub ack: BooleanStatus,
 }
 impl SetThermalThresholdParamsResponse {
     pub const CMD_ID: u8 = 0x45;
     pub const IS_REQUEST: bool = false;
-    pub fn new(ack: BooleanStatus) -> Self {
-        Self { ack }
-    }
     pub fn encode(&self, buf: &mut [u8]) -> Result<usize, EncodeError> {
         let mut idx = 0;
         if idx >= buf.len() {
@@ -7780,53 +5554,37 @@ impl SetThermalThresholdParamsResponse {
 }
 impl Default for SetThermalThresholdParamsResponse {
     fn default() -> Self {
-        Self::new(BooleanStatus::default())
+        Self {
+            ack: BooleanStatus::default(),
+        }
     }
 }
-
-/// Request thermal threshold precision
-/// CMD_ID: 0x46 | REQUEST
-#[derive(Debug, Clone, PartialEq)]
-pub struct ThermalThresholdPrecisionRequest {
-    _phantom: core::marker::PhantomData<()>,
-}
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct ThermalThresholdPrecisionRequest {}
 impl ThermalThresholdPrecisionRequest {
     pub const CMD_ID: u8 = 0x46;
     pub const IS_REQUEST: bool = true;
-    pub fn new() -> Self {
-        Self {
-            _phantom: core::marker::PhantomData,
-        }
-    }
     pub fn encode(&self, buf: &mut [u8]) -> Result<usize, EncodeError> {
         let mut idx = 0;
         Ok(idx)
     }
     pub fn decode(data: &[u8]) -> Result<Self, DecodeError> {
-        Ok(Self {
-            _phantom: core::marker::PhantomData,
-        })
+        let mut idx = 0;
+        Ok(Self {})
     }
 }
 impl Default for ThermalThresholdPrecisionRequest {
     fn default() -> Self {
-        Self::new()
+        Self {}
     }
 }
-
-/// Thermal threshold precision
-/// CMD_ID: 0x46 | RESPONSE
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, Copy, PartialEq)]
 pub struct ThermalThresholdPrecisionResponse {
-    /// Precision level
     pub precision: ThermalThresholdPrecision,
 }
 impl ThermalThresholdPrecisionResponse {
     pub const CMD_ID: u8 = 0x46;
     pub const IS_REQUEST: bool = false;
-    pub fn new(precision: ThermalThresholdPrecision) -> Self {
-        Self { precision }
-    }
     pub fn encode(&self, buf: &mut [u8]) -> Result<usize, EncodeError> {
         let mut idx = 0;
         if idx >= buf.len() {
@@ -7849,23 +5607,18 @@ impl ThermalThresholdPrecisionResponse {
 }
 impl Default for ThermalThresholdPrecisionResponse {
     fn default() -> Self {
-        Self::new(ThermalThresholdPrecision::default())
+        Self {
+            precision: ThermalThresholdPrecision::default(),
+        }
     }
 }
-
-/// Set thermal threshold precision
-/// CMD_ID: 0x47 | REQUEST
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, Copy, PartialEq)]
 pub struct SetThermalThresholdPrecisionRequest {
-    /// Precision level
     pub precision: ThermalThresholdPrecision,
 }
 impl SetThermalThresholdPrecisionRequest {
     pub const CMD_ID: u8 = 0x47;
     pub const IS_REQUEST: bool = true;
-    pub fn new(precision: ThermalThresholdPrecision) -> Self {
-        Self { precision }
-    }
     pub fn encode(&self, buf: &mut [u8]) -> Result<usize, EncodeError> {
         let mut idx = 0;
         if idx >= buf.len() {
@@ -7888,23 +5641,18 @@ impl SetThermalThresholdPrecisionRequest {
 }
 impl Default for SetThermalThresholdPrecisionRequest {
     fn default() -> Self {
-        Self::new(ThermalThresholdPrecision::default())
+        Self {
+            precision: ThermalThresholdPrecision::default(),
+        }
     }
 }
-
-/// Set thermal threshold precision response
-/// CMD_ID: 0x47 | RESPONSE
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, Copy, PartialEq)]
 pub struct SetThermalThresholdPrecisionResponse {
-    /// Confirmed precision
     pub precision: ThermalThresholdPrecision,
 }
 impl SetThermalThresholdPrecisionResponse {
     pub const CMD_ID: u8 = 0x47;
     pub const IS_REQUEST: bool = false;
-    pub fn new(precision: ThermalThresholdPrecision) -> Self {
-        Self { precision }
-    }
     pub fn encode(&self, buf: &mut [u8]) -> Result<usize, EncodeError> {
         let mut idx = 0;
         if idx >= buf.len() {
@@ -7927,23 +5675,18 @@ impl SetThermalThresholdPrecisionResponse {
 }
 impl Default for SetThermalThresholdPrecisionResponse {
     fn default() -> Self {
-        Self::new(ThermalThresholdPrecision::default())
+        Self {
+            precision: ThermalThresholdPrecision::default(),
+        }
     }
 }
-
-/// Format SD card
-/// CMD_ID: 0x48 | REQUEST
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, Copy, PartialEq)]
 pub struct FormatSdCardRequest {
-    /// Format failed or successful
     pub format_sta: BooleanStatus,
 }
 impl FormatSdCardRequest {
     pub const CMD_ID: u8 = 0x48;
     pub const IS_REQUEST: bool = true;
-    pub fn new(format_sta: BooleanStatus) -> Self {
-        Self { format_sta }
-    }
     pub fn encode(&self, buf: &mut [u8]) -> Result<usize, EncodeError> {
         let mut idx = 0;
         if idx >= buf.len() {
@@ -7965,23 +5708,18 @@ impl FormatSdCardRequest {
 }
 impl Default for FormatSdCardRequest {
     fn default() -> Self {
-        Self::new(BooleanStatus::default())
+        Self {
+            format_sta: BooleanStatus::default(),
+        }
     }
 }
-
-/// Format SD card response
-/// CMD_ID: 0x48 | RESPONSE
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, Copy, PartialEq)]
 pub struct FormatSdCardResponse {
-    /// Format failed or successful
     pub format_sta: BooleanStatus,
 }
 impl FormatSdCardResponse {
     pub const CMD_ID: u8 = 0x48;
     pub const IS_REQUEST: bool = false;
-    pub fn new(format_sta: BooleanStatus) -> Self {
-        Self { format_sta }
-    }
     pub fn encode(&self, buf: &mut [u8]) -> Result<usize, EncodeError> {
         let mut idx = 0;
         if idx >= buf.len() {
@@ -8003,23 +5741,18 @@ impl FormatSdCardResponse {
 }
 impl Default for FormatSdCardResponse {
     fn default() -> Self {
-        Self::new(BooleanStatus::default())
+        Self {
+            format_sta: BooleanStatus::default(),
+        }
     }
 }
-
-/// Get picture name type
-/// CMD_ID: 0x49 | REQUEST
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, Copy, PartialEq)]
 pub struct GetPictureNameTypeRequest {
-    /// File type
     pub file_type: FileType,
 }
 impl GetPictureNameTypeRequest {
     pub const CMD_ID: u8 = 0x49;
     pub const IS_REQUEST: bool = true;
-    pub fn new(file_type: FileType) -> Self {
-        Self { file_type }
-    }
     pub fn encode(&self, buf: &mut [u8]) -> Result<usize, EncodeError> {
         let mut idx = 0;
         if idx >= buf.len() {
@@ -8041,28 +5774,19 @@ impl GetPictureNameTypeRequest {
 }
 impl Default for GetPictureNameTypeRequest {
     fn default() -> Self {
-        Self::new(FileType::default())
+        Self {
+            file_type: FileType::default(),
+        }
     }
 }
-
-/// Picture name type
-/// CMD_ID: 0x49 | RESPONSE
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, Copy, PartialEq)]
 pub struct GetPictureNameTypeResponse {
-    /// File type
     pub file_type: FileType,
-    /// File naming type
     pub file_name_type: FileNameType,
 }
 impl GetPictureNameTypeResponse {
     pub const CMD_ID: u8 = 0x49;
     pub const IS_REQUEST: bool = false;
-    pub fn new(file_type: FileType, file_name_type: FileNameType) -> Self {
-        Self {
-            file_type,
-            file_name_type,
-        }
-    }
     pub fn encode(&self, buf: &mut [u8]) -> Result<usize, EncodeError> {
         let mut idx = 0;
         if idx >= buf.len() {
@@ -8098,28 +5822,20 @@ impl GetPictureNameTypeResponse {
 }
 impl Default for GetPictureNameTypeResponse {
     fn default() -> Self {
-        Self::new(FileType::default(), FileNameType::default())
+        Self {
+            file_type: FileType::default(),
+            file_name_type: FileNameType::default(),
+        }
     }
 }
-
-/// Set picture name type
-/// CMD_ID: 0x4A | REQUEST
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, Copy, PartialEq)]
 pub struct SetPictureNameTypeRequest {
-    /// File type
     pub file_type: FileType,
-    /// File naming type
     pub file_name_type: FileNameType,
 }
 impl SetPictureNameTypeRequest {
     pub const CMD_ID: u8 = 0x4A;
     pub const IS_REQUEST: bool = true;
-    pub fn new(file_type: FileType, file_name_type: FileNameType) -> Self {
-        Self {
-            file_type,
-            file_name_type,
-        }
-    }
     pub fn encode(&self, buf: &mut [u8]) -> Result<usize, EncodeError> {
         let mut idx = 0;
         if idx >= buf.len() {
@@ -8155,28 +5871,20 @@ impl SetPictureNameTypeRequest {
 }
 impl Default for SetPictureNameTypeRequest {
     fn default() -> Self {
-        Self::new(FileType::default(), FileNameType::default())
+        Self {
+            file_type: FileType::default(),
+            file_name_type: FileNameType::default(),
+        }
     }
 }
-
-/// Set picture name type response
-/// CMD_ID: 0x4A | RESPONSE
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, Copy, PartialEq)]
 pub struct SetPictureNameTypeResponse {
-    /// File type
     pub file_type: FileType,
-    /// File naming type
     pub file_name_type: FileNameType,
 }
 impl SetPictureNameTypeResponse {
     pub const CMD_ID: u8 = 0x4A;
     pub const IS_REQUEST: bool = false;
-    pub fn new(file_type: FileType, file_name_type: FileNameType) -> Self {
-        Self {
-            file_type,
-            file_name_type,
-        }
-    }
     pub fn encode(&self, buf: &mut [u8]) -> Result<usize, EncodeError> {
         let mut idx = 0;
         if idx >= buf.len() {
@@ -8212,53 +5920,38 @@ impl SetPictureNameTypeResponse {
 }
 impl Default for SetPictureNameTypeResponse {
     fn default() -> Self {
-        Self::new(FileType::default(), FileNameType::default())
+        Self {
+            file_type: FileType::default(),
+            file_name_type: FileNameType::default(),
+        }
     }
 }
-
-/// Request HDMI OSD status
-/// CMD_ID: 0x4B | REQUEST
-#[derive(Debug, Clone, PartialEq)]
-pub struct HdmiOsdStatusRequest {
-    _phantom: core::marker::PhantomData<()>,
-}
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct HdmiOsdStatusRequest {}
 impl HdmiOsdStatusRequest {
     pub const CMD_ID: u8 = 0x4B;
     pub const IS_REQUEST: bool = true;
-    pub fn new() -> Self {
-        Self {
-            _phantom: core::marker::PhantomData,
-        }
-    }
     pub fn encode(&self, buf: &mut [u8]) -> Result<usize, EncodeError> {
         let mut idx = 0;
         Ok(idx)
     }
     pub fn decode(data: &[u8]) -> Result<Self, DecodeError> {
-        Ok(Self {
-            _phantom: core::marker::PhantomData,
-        })
+        let mut idx = 0;
+        Ok(Self {})
     }
 }
 impl Default for HdmiOsdStatusRequest {
     fn default() -> Self {
-        Self::new()
+        Self {}
     }
 }
-
-/// HDMI OSD status
-/// CMD_ID: 0x4B | RESPONSE
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, Copy, PartialEq)]
 pub struct HdmiOsdStatusResponse {
-    /// Off or On
     pub osd_sta: BooleanOnOff,
 }
 impl HdmiOsdStatusResponse {
     pub const CMD_ID: u8 = 0x4B;
     pub const IS_REQUEST: bool = false;
-    pub fn new(osd_sta: BooleanOnOff) -> Self {
-        Self { osd_sta }
-    }
     pub fn encode(&self, buf: &mut [u8]) -> Result<usize, EncodeError> {
         let mut idx = 0;
         if idx >= buf.len() {
@@ -8280,23 +5973,18 @@ impl HdmiOsdStatusResponse {
 }
 impl Default for HdmiOsdStatusResponse {
     fn default() -> Self {
-        Self::new(BooleanOnOff::default())
+        Self {
+            osd_sta: BooleanOnOff::default(),
+        }
     }
 }
-
-/// Set HDMI OSD status
-/// CMD_ID: 0x4C | REQUEST
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, Copy, PartialEq)]
 pub struct SetHdmiOsdStatusRequest {
-    /// Off or On
     pub osd_sta: BooleanOnOff,
 }
 impl SetHdmiOsdStatusRequest {
     pub const CMD_ID: u8 = 0x4C;
     pub const IS_REQUEST: bool = true;
-    pub fn new(osd_sta: BooleanOnOff) -> Self {
-        Self { osd_sta }
-    }
     pub fn encode(&self, buf: &mut [u8]) -> Result<usize, EncodeError> {
         let mut idx = 0;
         if idx >= buf.len() {
@@ -8318,23 +6006,18 @@ impl SetHdmiOsdStatusRequest {
 }
 impl Default for SetHdmiOsdStatusRequest {
     fn default() -> Self {
-        Self::new(BooleanOnOff::default())
+        Self {
+            osd_sta: BooleanOnOff::default(),
+        }
     }
 }
-
-/// Set HDMI OSD status response
-/// CMD_ID: 0x4C | RESPONSE
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, Copy, PartialEq)]
 pub struct SetHdmiOsdStatusResponse {
-    /// Off or On
     pub osd_sta: BooleanOnOff,
 }
 impl SetHdmiOsdStatusResponse {
     pub const CMD_ID: u8 = 0x4C;
     pub const IS_REQUEST: bool = false;
-    pub fn new(osd_sta: BooleanOnOff) -> Self {
-        Self { osd_sta }
-    }
     pub fn encode(&self, buf: &mut [u8]) -> Result<usize, EncodeError> {
         let mut idx = 0;
         if idx >= buf.len() {
@@ -8356,53 +6039,37 @@ impl SetHdmiOsdStatusResponse {
 }
 impl Default for SetHdmiOsdStatusResponse {
     fn default() -> Self {
-        Self::new(BooleanOnOff::default())
+        Self {
+            osd_sta: BooleanOnOff::default(),
+        }
     }
 }
-
-/// Get AI mode status
-/// CMD_ID: 0x4D | REQUEST
-#[derive(Debug, Clone, PartialEq)]
-pub struct AiModeStatusRequest {
-    _phantom: core::marker::PhantomData<()>,
-}
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct AiModeStatusRequest {}
 impl AiModeStatusRequest {
     pub const CMD_ID: u8 = 0x4D;
     pub const IS_REQUEST: bool = true;
-    pub fn new() -> Self {
-        Self {
-            _phantom: core::marker::PhantomData,
-        }
-    }
     pub fn encode(&self, buf: &mut [u8]) -> Result<usize, EncodeError> {
         let mut idx = 0;
         Ok(idx)
     }
     pub fn decode(data: &[u8]) -> Result<Self, DecodeError> {
-        Ok(Self {
-            _phantom: core::marker::PhantomData,
-        })
+        let mut idx = 0;
+        Ok(Self {})
     }
 }
 impl Default for AiModeStatusRequest {
     fn default() -> Self {
-        Self::new()
+        Self {}
     }
 }
-
-/// AI mode status
-/// CMD_ID: 0x4D | RESPONSE
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, Copy, PartialEq)]
 pub struct AiModeStatusResponse {
-    /// Not enabled or AI mode enabled
     pub sta: BooleanOnOff,
 }
 impl AiModeStatusResponse {
     pub const CMD_ID: u8 = 0x4D;
     pub const IS_REQUEST: bool = false;
-    pub fn new(sta: BooleanOnOff) -> Self {
-        Self { sta }
-    }
     pub fn encode(&self, buf: &mut [u8]) -> Result<usize, EncodeError> {
         let mut idx = 0;
         if idx >= buf.len() {
@@ -8424,53 +6091,37 @@ impl AiModeStatusResponse {
 }
 impl Default for AiModeStatusResponse {
     fn default() -> Self {
-        Self::new(BooleanOnOff::default())
+        Self {
+            sta: BooleanOnOff::default(),
+        }
     }
 }
-
-/// Get AI tracking stream status
-/// CMD_ID: 0x4E | REQUEST
-#[derive(Debug, Clone, PartialEq)]
-pub struct AiTrackingStreamStatusRequest {
-    _phantom: core::marker::PhantomData<()>,
-}
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct AiTrackingStreamStatusRequest {}
 impl AiTrackingStreamStatusRequest {
     pub const CMD_ID: u8 = 0x4E;
     pub const IS_REQUEST: bool = true;
-    pub fn new() -> Self {
-        Self {
-            _phantom: core::marker::PhantomData,
-        }
-    }
     pub fn encode(&self, buf: &mut [u8]) -> Result<usize, EncodeError> {
         let mut idx = 0;
         Ok(idx)
     }
     pub fn decode(data: &[u8]) -> Result<Self, DecodeError> {
-        Ok(Self {
-            _phantom: core::marker::PhantomData,
-        })
+        let mut idx = 0;
+        Ok(Self {})
     }
 }
 impl Default for AiTrackingStreamStatusRequest {
     fn default() -> Self {
-        Self::new()
+        Self {}
     }
 }
-
-/// AI tracking stream status
-/// CMD_ID: 0x4E | RESPONSE
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, Copy, PartialEq)]
 pub struct AiTrackingStreamStatusResponse {
-    /// 0: Not enabled, 1: Outputting, 2: AI not enabled, 3: Tracking not enabled
     pub sta: u8,
 }
 impl AiTrackingStreamStatusResponse {
     pub const CMD_ID: u8 = 0x4E;
     pub const IS_REQUEST: bool = false;
-    pub fn new(sta: u8) -> Self {
-        Self { sta }
-    }
     pub fn encode(&self, buf: &mut [u8]) -> Result<usize, EncodeError> {
         let mut idx = 0;
         if idx + 1 > buf.len() {
@@ -8496,53 +6147,35 @@ impl AiTrackingStreamStatusResponse {
 }
 impl Default for AiTrackingStreamStatusResponse {
     fn default() -> Self {
-        Self::new(0)
+        Self { sta: 0 }
     }
 }
-
-/// Manually update thermal shutter
-/// CMD_ID: 0x4F | REQUEST
-#[derive(Debug, Clone, PartialEq)]
-pub struct UpdateThermalShutterRequest {
-    _phantom: core::marker::PhantomData<()>,
-}
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct UpdateThermalShutterRequest {}
 impl UpdateThermalShutterRequest {
     pub const CMD_ID: u8 = 0x4F;
     pub const IS_REQUEST: bool = true;
-    pub fn new() -> Self {
-        Self {
-            _phantom: core::marker::PhantomData,
-        }
-    }
     pub fn encode(&self, buf: &mut [u8]) -> Result<usize, EncodeError> {
         let mut idx = 0;
         Ok(idx)
     }
     pub fn decode(data: &[u8]) -> Result<Self, DecodeError> {
-        Ok(Self {
-            _phantom: core::marker::PhantomData,
-        })
+        let mut idx = 0;
+        Ok(Self {})
     }
 }
 impl Default for UpdateThermalShutterRequest {
     fn default() -> Self {
-        Self::new()
+        Self {}
     }
 }
-
-/// Update thermal shutter response
-/// CMD_ID: 0x4F | RESPONSE
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, Copy, PartialEq)]
 pub struct UpdateThermalShutterResponse {
-    /// Update successful or failed
     pub ack: BooleanStatus,
 }
 impl UpdateThermalShutterResponse {
     pub const CMD_ID: u8 = 0x4F;
     pub const IS_REQUEST: bool = false;
-    pub fn new(ack: BooleanStatus) -> Self {
-        Self { ack }
-    }
     pub fn encode(&self, buf: &mut [u8]) -> Result<usize, EncodeError> {
         let mut idx = 0;
         if idx >= buf.len() {
@@ -8564,47 +6197,23 @@ impl UpdateThermalShutterResponse {
 }
 impl Default for UpdateThermalShutterResponse {
     fn default() -> Self {
-        Self::new(BooleanStatus::default())
+        Self {
+            ack: BooleanStatus::default(),
+        }
     }
 }
-
-/// AI tracking coordinate stream
-/// CMD_ID: 0x50 | RESPONSE
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, Copy, PartialEq)]
 pub struct AiTrackingCoordinateStream {
-    /// Target tracking coordinate X
     pub pos_x: u16,
-    /// Target tracking coordinate Y
     pub pos_y: u16,
-    /// Target tracking box width
     pub pos_width: u16,
-    /// Target tracking box height
     pub pos_height: u16,
-    /// Target type ID
     pub target_id: AITargetType,
-    /// Tracking status
     pub track_sta: AITrackingStatus,
 }
 impl AiTrackingCoordinateStream {
     pub const CMD_ID: u8 = 0x50;
     pub const IS_REQUEST: bool = false;
-    pub fn new(
-        pos_x: u16,
-        pos_y: u16,
-        pos_width: u16,
-        pos_height: u16,
-        target_id: AITargetType,
-        track_sta: AITrackingStatus,
-    ) -> Self {
-        Self {
-            pos_x,
-            pos_y,
-            pos_width,
-            pos_height,
-            target_id,
-            track_sta,
-        }
-    }
     pub fn encode(&self, buf: &mut [u8]) -> Result<usize, EncodeError> {
         let mut idx = 0;
         if idx + 2 > buf.len() {
@@ -8700,30 +6309,23 @@ impl AiTrackingCoordinateStream {
 }
 impl Default for AiTrackingCoordinateStream {
     fn default() -> Self {
-        Self::new(
-            0,
-            0,
-            0,
-            0,
-            AITargetType::default(),
-            AITrackingStatus::default(),
-        )
+        Self {
+            pos_x: 0,
+            pos_y: 0,
+            pos_width: 0,
+            pos_height: 0,
+            target_id: AITargetType::default(),
+            track_sta: AITrackingStatus::default(),
+        }
     }
 }
-
-/// Set AI tracking stream status
-/// CMD_ID: 0x51 | REQUEST
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, Copy, PartialEq)]
 pub struct SetAiTrackingStreamStatusRequest {
-    /// Enable or Disable output
     pub track_action: BooleanOnOff,
 }
 impl SetAiTrackingStreamStatusRequest {
     pub const CMD_ID: u8 = 0x51;
     pub const IS_REQUEST: bool = true;
-    pub fn new(track_action: BooleanOnOff) -> Self {
-        Self { track_action }
-    }
     pub fn encode(&self, buf: &mut [u8]) -> Result<usize, EncodeError> {
         let mut idx = 0;
         if idx >= buf.len() {
@@ -8745,23 +6347,18 @@ impl SetAiTrackingStreamStatusRequest {
 }
 impl Default for SetAiTrackingStreamStatusRequest {
     fn default() -> Self {
-        Self::new(BooleanOnOff::default())
+        Self {
+            track_action: BooleanOnOff::default(),
+        }
     }
 }
-
-/// Set AI tracking stream response
-/// CMD_ID: 0x51 | RESPONSE
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, Copy, PartialEq)]
 pub struct SetAiTrackingStreamStatusResponse {
-    /// Output enabled or disabled
     pub sta: BooleanOnOff,
 }
 impl SetAiTrackingStreamStatusResponse {
     pub const CMD_ID: u8 = 0x51;
     pub const IS_REQUEST: bool = false;
-    pub fn new(sta: BooleanOnOff) -> Self {
-        Self { sta }
-    }
     pub fn encode(&self, buf: &mut [u8]) -> Result<usize, EncodeError> {
         let mut idx = 0;
         if idx >= buf.len() {
@@ -8783,193 +6380,19 @@ impl SetAiTrackingStreamStatusResponse {
 }
 impl Default for SetAiTrackingStreamStatusResponse {
     fn default() -> Self {
-        Self::new(BooleanOnOff::default())
-    }
-}
-
-/// Request weak control mode
-/// CMD_ID: 0x70 | REQUEST
-#[derive(Debug, Clone, PartialEq)]
-pub struct WeakControlModeRequest {
-    _phantom: core::marker::PhantomData<()>,
-}
-impl WeakControlModeRequest {
-    pub const CMD_ID: u8 = 0x70;
-    pub const IS_REQUEST: bool = true;
-    pub fn new() -> Self {
         Self {
-            _phantom: core::marker::PhantomData,
+            sta: BooleanOnOff::default(),
         }
     }
-    pub fn encode(&self, buf: &mut [u8]) -> Result<usize, EncodeError> {
-        let mut idx = 0;
-        Ok(idx)
-    }
-    pub fn decode(data: &[u8]) -> Result<Self, DecodeError> {
-        Ok(Self {
-            _phantom: core::marker::PhantomData,
-        })
-    }
 }
-impl Default for WeakControlModeRequest {
-    fn default() -> Self {
-        Self::new()
-    }
-}
-
-/// Weak control mode
-/// CMD_ID: 0x70 | RESPONSE
-#[derive(Debug, Clone, PartialEq)]
-pub struct WeakControlModeResponse {
-    /// Enabled or Disabled
-    pub weak_mode_state: BooleanOnOff,
-}
-impl WeakControlModeResponse {
-    pub const CMD_ID: u8 = 0x70;
-    pub const IS_REQUEST: bool = false;
-    pub fn new(weak_mode_state: BooleanOnOff) -> Self {
-        Self { weak_mode_state }
-    }
-    pub fn encode(&self, buf: &mut [u8]) -> Result<usize, EncodeError> {
-        let mut idx = 0;
-        if idx >= buf.len() {
-            return Err(EncodeError::BufferTooSmall);
-        }
-        buf[idx] = self.weak_mode_state as u8;
-        idx += 1;
-        Ok(idx)
-    }
-    pub fn decode(data: &[u8]) -> Result<Self, DecodeError> {
-        let mut idx = 0;
-        if idx >= data.len() {
-            return Err(DecodeError::NotEnoughBytes);
-        }
-        let weak_mode_state =
-            BooleanOnOff::from_u8(data[idx]).ok_or(DecodeError::InvalidEnumValue)?;
-        idx += 1;
-        Ok(Self { weak_mode_state })
-    }
-}
-impl Default for WeakControlModeResponse {
-    fn default() -> Self {
-        Self::new(BooleanOnOff::default())
-    }
-}
-
-/// Set weak control mode
-/// CMD_ID: 0x71 | REQUEST
-#[derive(Debug, Clone, PartialEq)]
-pub struct SetWeakControlModeRequest {
-    /// Enable or Disable
-    pub weak_mode_state: BooleanOnOff,
-}
-impl SetWeakControlModeRequest {
-    pub const CMD_ID: u8 = 0x71;
-    pub const IS_REQUEST: bool = true;
-    pub fn new(weak_mode_state: BooleanOnOff) -> Self {
-        Self { weak_mode_state }
-    }
-    pub fn encode(&self, buf: &mut [u8]) -> Result<usize, EncodeError> {
-        let mut idx = 0;
-        if idx >= buf.len() {
-            return Err(EncodeError::BufferTooSmall);
-        }
-        buf[idx] = self.weak_mode_state as u8;
-        idx += 1;
-        Ok(idx)
-    }
-    pub fn decode(data: &[u8]) -> Result<Self, DecodeError> {
-        let mut idx = 0;
-        if idx >= data.len() {
-            return Err(DecodeError::NotEnoughBytes);
-        }
-        let weak_mode_state =
-            BooleanOnOff::from_u8(data[idx]).ok_or(DecodeError::InvalidEnumValue)?;
-        idx += 1;
-        Ok(Self { weak_mode_state })
-    }
-}
-impl Default for SetWeakControlModeRequest {
-    fn default() -> Self {
-        Self::new(BooleanOnOff::default())
-    }
-}
-
-/// Set weak control mode response
-/// CMD_ID: 0x71 | RESPONSE
-#[derive(Debug, Clone, PartialEq)]
-pub struct SetWeakControlModeResponse {
-    /// Success or Failure
-    pub sta: BooleanStatus,
-    /// Enabled or Disabled
-    pub weak_mode_state: BooleanOnOff,
-}
-impl SetWeakControlModeResponse {
-    pub const CMD_ID: u8 = 0x71;
-    pub const IS_REQUEST: bool = false;
-    pub fn new(sta: BooleanStatus, weak_mode_state: BooleanOnOff) -> Self {
-        Self {
-            sta,
-            weak_mode_state,
-        }
-    }
-    pub fn encode(&self, buf: &mut [u8]) -> Result<usize, EncodeError> {
-        let mut idx = 0;
-        if idx >= buf.len() {
-            return Err(EncodeError::BufferTooSmall);
-        }
-        buf[idx] = self.sta as u8;
-        idx += 1;
-        if idx >= buf.len() {
-            return Err(EncodeError::BufferTooSmall);
-        }
-        buf[idx] = self.weak_mode_state as u8;
-        idx += 1;
-        Ok(idx)
-    }
-    pub fn decode(data: &[u8]) -> Result<Self, DecodeError> {
-        let mut idx = 0;
-        if idx >= data.len() {
-            return Err(DecodeError::NotEnoughBytes);
-        }
-        let sta = BooleanStatus::from_u8(data[idx]).ok_or(DecodeError::InvalidEnumValue)?;
-        idx += 1;
-        if idx >= data.len() {
-            return Err(DecodeError::NotEnoughBytes);
-        }
-        let weak_mode_state =
-            BooleanOnOff::from_u8(data[idx]).ok_or(DecodeError::InvalidEnumValue)?;
-        idx += 1;
-        Ok(Self {
-            sta,
-            weak_mode_state,
-        })
-    }
-}
-impl Default for SetWeakControlModeResponse {
-    fn default() -> Self {
-        Self::new(BooleanStatus::default(), BooleanOnOff::default())
-    }
-}
-
-/// Gimbal camera soft reboot
-/// CMD_ID: 0x80 | REQUEST
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, Copy, PartialEq)]
 pub struct SoftRebootRequest {
-    /// No action or Camera reboot
     pub camera_reboot: BooleanOnOff,
-    /// No action or Gimbal reboot
     pub gimbal_reset: BooleanOnOff,
 }
 impl SoftRebootRequest {
     pub const CMD_ID: u8 = 0x80;
     pub const IS_REQUEST: bool = true;
-    pub fn new(camera_reboot: BooleanOnOff, gimbal_reset: BooleanOnOff) -> Self {
-        Self {
-            camera_reboot,
-            gimbal_reset,
-        }
-    }
     pub fn encode(&self, buf: &mut [u8]) -> Result<usize, EncodeError> {
         let mut idx = 0;
         if idx >= buf.len() {
@@ -9005,28 +6428,20 @@ impl SoftRebootRequest {
 }
 impl Default for SoftRebootRequest {
     fn default() -> Self {
-        Self::new(BooleanOnOff::default(), BooleanOnOff::default())
+        Self {
+            camera_reboot: BooleanOnOff::default(),
+            gimbal_reset: BooleanOnOff::default(),
+        }
     }
 }
-
-/// Soft reboot response
-/// CMD_ID: 0x80 | RESPONSE
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, Copy, PartialEq)]
 pub struct SoftRebootResponse {
-    /// No action or Camera rebooting
     pub camera_reboot_sta: BooleanOnOff,
-    /// No action or Gimbal rebooting
     pub gimbal_reset_sta: BooleanOnOff,
 }
 impl SoftRebootResponse {
     pub const CMD_ID: u8 = 0x80;
     pub const IS_REQUEST: bool = false;
-    pub fn new(camera_reboot_sta: BooleanOnOff, gimbal_reset_sta: BooleanOnOff) -> Self {
-        Self {
-            camera_reboot_sta,
-            gimbal_reset_sta,
-        }
-    }
     pub fn encode(&self, buf: &mut [u8]) -> Result<usize, EncodeError> {
         let mut idx = 0;
         if idx >= buf.len() {
@@ -9063,57 +6478,40 @@ impl SoftRebootResponse {
 }
 impl Default for SoftRebootResponse {
     fn default() -> Self {
-        Self::new(BooleanOnOff::default(), BooleanOnOff::default())
+        Self {
+            camera_reboot_sta: BooleanOnOff::default(),
+            gimbal_reset_sta: BooleanOnOff::default(),
+        }
     }
 }
-
-/// Get gimbal camera IP address
-/// CMD_ID: 0x81 | REQUEST
-#[derive(Debug, Clone, PartialEq)]
-pub struct GetIpAddressRequest {
-    _phantom: core::marker::PhantomData<()>,
-}
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct GetIpAddressRequest {}
 impl GetIpAddressRequest {
     pub const CMD_ID: u8 = 0x81;
     pub const IS_REQUEST: bool = true;
-    pub fn new() -> Self {
-        Self {
-            _phantom: core::marker::PhantomData,
-        }
-    }
     pub fn encode(&self, buf: &mut [u8]) -> Result<usize, EncodeError> {
         let mut idx = 0;
         Ok(idx)
     }
     pub fn decode(data: &[u8]) -> Result<Self, DecodeError> {
-        Ok(Self {
-            _phantom: core::marker::PhantomData,
-        })
+        let mut idx = 0;
+        Ok(Self {})
     }
 }
 impl Default for GetIpAddressRequest {
     fn default() -> Self {
-        Self::new()
+        Self {}
     }
 }
-
-/// IP address
-/// CMD_ID: 0x81 | RESPONSE
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, Copy, PartialEq)]
 pub struct GetIpAddressResponse {
-    /// IP Address
     pub ip: u32,
-    /// Subnet Mask
     pub mask: u32,
-    /// Gateway
     pub gateway: u32,
 }
 impl GetIpAddressResponse {
     pub const CMD_ID: u8 = 0x81;
     pub const IS_REQUEST: bool = false;
-    pub fn new(ip: u32, mask: u32, gateway: u32) -> Self {
-        Self { ip, mask, gateway }
-    }
     pub fn encode(&self, buf: &mut [u8]) -> Result<usize, EncodeError> {
         let mut idx = 0;
         if idx + 4 > buf.len() {
@@ -9167,27 +6565,22 @@ impl GetIpAddressResponse {
 }
 impl Default for GetIpAddressResponse {
     fn default() -> Self {
-        Self::new(0, 0, 0)
+        Self {
+            ip: 0,
+            mask: 0,
+            gateway: 0,
+        }
     }
 }
-
-/// Set gimbal camera IP address
-/// CMD_ID: 0x82 | REQUEST
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, Copy, PartialEq)]
 pub struct SetIpAddressRequest {
-    /// IP Address
     pub ip: u32,
-    /// Subnet Mask
     pub mask: u32,
-    /// Gateway
     pub gateway: u32,
 }
 impl SetIpAddressRequest {
     pub const CMD_ID: u8 = 0x82;
     pub const IS_REQUEST: bool = true;
-    pub fn new(ip: u32, mask: u32, gateway: u32) -> Self {
-        Self { ip, mask, gateway }
-    }
     pub fn encode(&self, buf: &mut [u8]) -> Result<usize, EncodeError> {
         let mut idx = 0;
         if idx + 4 > buf.len() {
@@ -9241,23 +6634,20 @@ impl SetIpAddressRequest {
 }
 impl Default for SetIpAddressRequest {
     fn default() -> Self {
-        Self::new(0, 0, 0)
+        Self {
+            ip: 0,
+            mask: 0,
+            gateway: 0,
+        }
     }
 }
-
-/// Set IP address response
-/// CMD_ID: 0x82 | RESPONSE
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, Copy, PartialEq)]
 pub struct SetIpAddressResponse {
-    /// Successfully set or failed
     pub ack: BooleanStatus,
 }
 impl SetIpAddressResponse {
     pub const CMD_ID: u8 = 0x82;
     pub const IS_REQUEST: bool = false;
-    pub fn new(ack: BooleanStatus) -> Self {
-        Self { ack }
-    }
     pub fn encode(&self, buf: &mut [u8]) -> Result<usize, EncodeError> {
         let mut idx = 0;
         if idx >= buf.len() {
@@ -9279,1446 +6669,1092 @@ impl SetIpAddressResponse {
 }
 impl Default for SetIpAddressResponse {
     fn default() -> Self {
-        Self::new(BooleanStatus::default())
+        Self {
+            ack: BooleanStatus::default(),
+        }
     }
 }
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, Copy, PartialEq)]
 pub enum Message {
-    /// TCP heartbeat keepalive
     TcpHeartbeat(TcpHeartbeat),
-    /// Request firmware version
     FirmwareVersionRequest(FirmwareVersionRequest),
-    /// Firmware version response
     FirmwareVersionResponse(FirmwareVersionResponse),
-    /// Get hardware ID
     HardwareIdRequest(HardwareIdRequest),
-    /// Hardware ID response
     HardwareIdResponse(HardwareIdResponse),
-    /// Trigger auto focus
     AutoFocusRequest(AutoFocusRequest),
-    /// Auto focus response
     AutoFocusResponse(AutoFocusResponse),
-    /// Manual zoom control
     ManualZoomRequest(ManualZoomRequest),
-    /// Manual zoom response
     ManualZoomResponse(ManualZoomResponse),
-    /// Manual focus control
     ManualFocusRequest(ManualFocusRequest),
-    /// Manual focus response
     ManualFocusResponse(ManualFocusResponse),
-    /// Control gimbal rotation
     GimbalRotationRequest(GimbalRotationRequest),
-    /// Gimbal rotation response
     GimbalRotationResponse(GimbalRotationResponse),
-    /// Center gimbal
     CenterGimbalRequest(CenterGimbalRequest),
-    /// Center response
     CenterGimbalResponse(CenterGimbalResponse),
-    /// Request camera system info
     CameraSystemInfoRequest(CameraSystemInfoRequest),
-    /// Camera system info
     CameraSystemInfoResponse(CameraSystemInfoResponse),
-    /// Function feedback (sent by camera)
     FunctionFeedback(FunctionFeedback),
-    /// Photo/video/mode control
     FunctionControl(FunctionControl),
-    /// Request gimbal attitude
     GimbalAttitudeRequest(GimbalAttitudeRequest),
-    /// Gimbal attitude data
     GimbalAttitudeResponse(GimbalAttitudeResponse),
-    /// Set gimbal angles
     SetGimbalAttitudeRequest(SetGimbalAttitudeRequest),
-    /// Set attitude response
     SetGimbalAttitudeResponse(SetGimbalAttitudeResponse),
-    /// Set absolute zoom level
     AbsoluteZoomRequest(AbsoluteZoomRequest),
-    /// Absolute zoom response
     AbsoluteZoomResponse(AbsoluteZoomResponse),
-    /// Request video stitching mode
     VideoStitchingModeRequest(VideoStitchingModeRequest),
-    /// Video stitching mode
     VideoStitchingModeResponse(VideoStitchingModeResponse),
-    /// Set video stitching mode
     SetVideoStitchingModeRequest(SetVideoStitchingModeRequest),
-    /// Set mode response
     SetVideoStitchingModeResponse(SetVideoStitchingModeResponse),
-    /// Get temperature at point
     GetTemperatureAtPointRequest(GetTemperatureAtPointRequest),
-    /// Point temperature
     GetTemperatureAtPointResponse(GetTemperatureAtPointResponse),
-    /// Measure temperature in rectangle
     LocalTemperatureMeasurementRequest(LocalTemperatureMeasurementRequest),
-    /// Local temperature data
     LocalTemperatureMeasurementResponse(LocalTemperatureMeasurementResponse),
-    /// Measure global temperature
     GlobalTemperatureMeasurementRequest(GlobalTemperatureMeasurementRequest),
-    /// Global temperature data
     GlobalTemperatureMeasurementResponse(GlobalTemperatureMeasurementResponse),
-    /// Request laser rangefinder distance
-    LaserDistanceRequest(LaserDistanceRequest),
-    /// Laser distance
-    LaserDistanceResponse(LaserDistanceResponse),
-    /// Request max zoom range
-    MaxZoomRangeRequest(MaxZoomRangeRequest),
-    /// Max zoom range
-    MaxZoomRangeResponse(MaxZoomRangeResponse),
-    /// Request target lat/lon
-    LaserTargetLocationRequest(LaserTargetLocationRequest),
-    /// Target location
-    LaserTargetLocationResponse(LaserTargetLocationResponse),
-    /// Request current zoom level
-    CurrentZoomRequest(CurrentZoomRequest),
-    /// Current zoom
-    CurrentZoomResponse(CurrentZoomResponse),
-    /// Request current gimbal mode
-    GimbalModeRequest(GimbalModeRequest),
-    /// Gimbal mode
-    GimbalModeResponse(GimbalModeResponse),
-    /// Request thermal pseudo-color
     PseudoColorRequest(PseudoColorRequest),
-    /// Pseudo-color
     PseudoColorResponse(PseudoColorResponse),
-    /// Set thermal pseudo-color
     SetPseudoColorRequest(SetPseudoColorRequest),
-    /// Set pseudo-color response
     SetPseudoColorResponse(SetPseudoColorResponse),
-    /// Request camera encoding params
     EncodingParamsRequest(EncodingParamsRequest),
-    /// Encoding parameters
     EncodingParamsResponse(EncodingParamsResponse),
-    /// Set camera encoding params
     SetEncodingParamsRequest(SetEncodingParamsRequest),
-    /// Set encoding response
     SetEncodingParamsResponse(SetEncodingParamsResponse),
-    /// Send aircraft attitude to gimbal
     SendAircraftAttitude(SendAircraftAttitude),
-    /// Send RC channel data to gimbal
     SendRcChannelDataRequest(SendRcChannelDataRequest),
-    /// Request flight controller to send data stream
     RequestFlightControllerDataStreamRequest(RequestFlightControllerDataStreamRequest),
-    /// Flight controller data stream response
     RequestFlightControllerDataStreamResponse(RequestFlightControllerDataStreamResponse),
-    /// Request gimbal data stream
-    RequestDataStreamRequest(RequestDataStreamRequest),
-    /// Data stream config response
-    RequestDataStreamResponse(RequestDataStreamResponse),
-    /// Request magnetic encoder angles
-    MagneticEncoderAngleRequest(MagneticEncoderAngleRequest),
-    /// Magnetic encoder angles
-    MagneticEncoderAngleResponse(MagneticEncoderAngleResponse),
-    /// Request gimbal control mode
-    GimbalControlModeRequest(GimbalControlModeRequest),
-    /// Gimbal control mode
-    GimbalControlModeResponse(GimbalControlModeResponse),
-    /// Request weak control threshold
-    WeakControlThresholdRequest(WeakControlThresholdRequest),
-    /// Weak control threshold data
-    WeakControlThresholdResponse(WeakControlThresholdResponse),
-    /// Set weak control threshold
-    SetWeakControlThresholdRequest(SetWeakControlThresholdRequest),
-    /// Set threshold response
-    SetWeakControlThresholdResponse(SetWeakControlThresholdResponse),
-    /// Request motor voltage
-    MotorVoltageRequest(MotorVoltageRequest),
-    /// Motor voltage data
-    MotorVoltageResponse(MotorVoltageResponse),
-    /// Set UTC time
     SetUtcTimeRequest(SetUtcTimeRequest),
-    /// UTC time response
     SetUtcTimeResponse(SetUtcTimeResponse),
-    /// Request gimbal system information
-    GimbalSystemInfoRequest(GimbalSystemInfoRequest),
-    /// Gimbal system info
-    GimbalSystemInfoResponse(GimbalSystemInfoResponse),
-    /// Set laser ranging state
-    SetLaserStateRequest(SetLaserStateRequest),
-    /// Laser state response
-    SetLaserStateResponse(SetLaserStateResponse),
-    /// Request thermal output mode
     ThermalOutputModeRequest(ThermalOutputModeRequest),
-    /// Thermal output mode
     ThermalOutputModeResponse(ThermalOutputModeResponse),
-    /// Set thermal output mode
     SetThermalOutputModeRequest(SetThermalOutputModeRequest),
-    /// Set thermal output mode response
     SetThermalOutputModeResponse(SetThermalOutputModeResponse),
-    /// Get single temperature frame
     GetSingleTemperatureFrameRequest(GetSingleTemperatureFrameRequest),
-    /// Single temperature frame response
     GetSingleTemperatureFrameResponse(GetSingleTemperatureFrameResponse),
-    /// Request thermal gain mode
     ThermalGainModeRequest(ThermalGainModeRequest),
-    /// Thermal gain mode
     ThermalGainModeResponse(ThermalGainModeResponse),
-    /// Set thermal gain mode
     SetThermalGainModeRequest(SetThermalGainModeRequest),
-    /// Set thermal gain mode response
     SetThermalGainModeResponse(SetThermalGainModeResponse),
-    /// Request thermal env correction params
     ThermalEnvCorrectionParamsRequest(ThermalEnvCorrectionParamsRequest),
-    /// Thermal env correction params
     ThermalEnvCorrectionParamsResponse(ThermalEnvCorrectionParamsResponse),
-    /// Set thermal env correction params
     SetThermalEnvCorrectionParamsRequest(SetThermalEnvCorrectionParamsRequest),
-    /// Set env correction params response
     SetThermalEnvCorrectionParamsResponse(SetThermalEnvCorrectionParamsResponse),
-    /// Request env correction switch
     ThermalEnvCorrectionSwitchRequest(ThermalEnvCorrectionSwitchRequest),
-    /// Env correction switch
     ThermalEnvCorrectionSwitchResponse(ThermalEnvCorrectionSwitchResponse),
-    /// Set env correction switch
     SetThermalEnvCorrectionSwitchRequest(SetThermalEnvCorrectionSwitchRequest),
-    /// Set env correction switch response
     SetThermalEnvCorrectionSwitchResponse(SetThermalEnvCorrectionSwitchResponse),
-    /// Send GPS raw data to gimbal
     SendGpsData(SendGpsData),
-    /// Request system time
     SystemTimeRequest(SystemTimeRequest),
-    /// System time
     SystemTimeResponse(SystemTimeResponse),
-    /// Set single-axis attitude angle
     SingleAxisAttitudeRequest(SingleAxisAttitudeRequest),
-    /// Single-axis attitude response
     SingleAxisAttitudeResponse(SingleAxisAttitudeResponse),
-    /// Request thermal threshold switch
     ThermalThresholdSwitchRequest(ThermalThresholdSwitchRequest),
-    /// Thermal threshold switch
     ThermalThresholdSwitchResponse(ThermalThresholdSwitchResponse),
-    /// Set thermal threshold switch
     SetThermalThresholdSwitchRequest(SetThermalThresholdSwitchRequest),
-    /// Set thermal threshold switch response
     SetThermalThresholdSwitchResponse(SetThermalThresholdSwitchResponse),
-    /// Request thermal threshold params
     ThermalThresholdParamsRequest(ThermalThresholdParamsRequest),
-    /// Thermal threshold params
     ThermalThresholdParamsResponse(ThermalThresholdParamsResponse),
-    /// Set thermal threshold params
     SetThermalThresholdParamsRequest(SetThermalThresholdParamsRequest),
-    /// Set thermal threshold params response
     SetThermalThresholdParamsResponse(SetThermalThresholdParamsResponse),
-    /// Request thermal threshold precision
     ThermalThresholdPrecisionRequest(ThermalThresholdPrecisionRequest),
-    /// Thermal threshold precision
     ThermalThresholdPrecisionResponse(ThermalThresholdPrecisionResponse),
-    /// Set thermal threshold precision
     SetThermalThresholdPrecisionRequest(SetThermalThresholdPrecisionRequest),
-    /// Set thermal threshold precision response
     SetThermalThresholdPrecisionResponse(SetThermalThresholdPrecisionResponse),
-    /// Format SD card
     FormatSdCardRequest(FormatSdCardRequest),
-    /// Format SD card response
     FormatSdCardResponse(FormatSdCardResponse),
-    /// Get picture name type
     GetPictureNameTypeRequest(GetPictureNameTypeRequest),
-    /// Picture name type
     GetPictureNameTypeResponse(GetPictureNameTypeResponse),
-    /// Set picture name type
     SetPictureNameTypeRequest(SetPictureNameTypeRequest),
-    /// Set picture name type response
     SetPictureNameTypeResponse(SetPictureNameTypeResponse),
-    /// Request HDMI OSD status
     HdmiOsdStatusRequest(HdmiOsdStatusRequest),
-    /// HDMI OSD status
     HdmiOsdStatusResponse(HdmiOsdStatusResponse),
-    /// Set HDMI OSD status
     SetHdmiOsdStatusRequest(SetHdmiOsdStatusRequest),
-    /// Set HDMI OSD status response
     SetHdmiOsdStatusResponse(SetHdmiOsdStatusResponse),
-    /// Get AI mode status
     AiModeStatusRequest(AiModeStatusRequest),
-    /// AI mode status
     AiModeStatusResponse(AiModeStatusResponse),
-    /// Get AI tracking stream status
     AiTrackingStreamStatusRequest(AiTrackingStreamStatusRequest),
-    /// AI tracking stream status
     AiTrackingStreamStatusResponse(AiTrackingStreamStatusResponse),
-    /// Manually update thermal shutter
     UpdateThermalShutterRequest(UpdateThermalShutterRequest),
-    /// Update thermal shutter response
     UpdateThermalShutterResponse(UpdateThermalShutterResponse),
-    /// AI tracking coordinate stream
     AiTrackingCoordinateStream(AiTrackingCoordinateStream),
-    /// Set AI tracking stream status
     SetAiTrackingStreamStatusRequest(SetAiTrackingStreamStatusRequest),
-    /// Set AI tracking stream response
     SetAiTrackingStreamStatusResponse(SetAiTrackingStreamStatusResponse),
-    /// Request weak control mode
-    WeakControlModeRequest(WeakControlModeRequest),
-    /// Weak control mode
-    WeakControlModeResponse(WeakControlModeResponse),
-    /// Set weak control mode
-    SetWeakControlModeRequest(SetWeakControlModeRequest),
-    /// Set weak control mode response
-    SetWeakControlModeResponse(SetWeakControlModeResponse),
-    /// Gimbal camera soft reboot
     SoftRebootRequest(SoftRebootRequest),
-    /// Soft reboot response
     SoftRebootResponse(SoftRebootResponse),
-    /// Get gimbal camera IP address
     GetIpAddressRequest(GetIpAddressRequest),
-    /// IP address
     GetIpAddressResponse(GetIpAddressResponse),
-    /// Set gimbal camera IP address
     SetIpAddressRequest(SetIpAddressRequest),
-    /// Set IP address response
     SetIpAddressResponse(SetIpAddressResponse),
 }
 impl Message {
-    pub fn cmd_id(&self) -> u8 {
+    pub const fn cmd_id(&self) -> u8 {
         match self {
-            Message::TcpHeartbeat(_) => 0x00,
-            Message::FirmwareVersionRequest(_) => 0x01,
-            Message::FirmwareVersionResponse(_) => 0x01,
-            Message::HardwareIdRequest(_) => 0x02,
-            Message::HardwareIdResponse(_) => 0x02,
-            Message::AutoFocusRequest(_) => 0x04,
-            Message::AutoFocusResponse(_) => 0x04,
-            Message::ManualZoomRequest(_) => 0x05,
-            Message::ManualZoomResponse(_) => 0x05,
-            Message::ManualFocusRequest(_) => 0x06,
-            Message::ManualFocusResponse(_) => 0x06,
-            Message::GimbalRotationRequest(_) => 0x07,
-            Message::GimbalRotationResponse(_) => 0x07,
-            Message::CenterGimbalRequest(_) => 0x08,
-            Message::CenterGimbalResponse(_) => 0x08,
-            Message::CameraSystemInfoRequest(_) => 0x0A,
-            Message::CameraSystemInfoResponse(_) => 0x0A,
-            Message::FunctionFeedback(_) => 0x0B,
-            Message::FunctionControl(_) => 0x0C,
-            Message::GimbalAttitudeRequest(_) => 0x0D,
-            Message::GimbalAttitudeResponse(_) => 0x0D,
-            Message::SetGimbalAttitudeRequest(_) => 0x0E,
-            Message::SetGimbalAttitudeResponse(_) => 0x0E,
-            Message::AbsoluteZoomRequest(_) => 0x0F,
-            Message::AbsoluteZoomResponse(_) => 0x0F,
-            Message::VideoStitchingModeRequest(_) => 0x10,
-            Message::VideoStitchingModeResponse(_) => 0x10,
-            Message::SetVideoStitchingModeRequest(_) => 0x11,
-            Message::SetVideoStitchingModeResponse(_) => 0x11,
-            Message::GetTemperatureAtPointRequest(_) => 0x12,
-            Message::GetTemperatureAtPointResponse(_) => 0x12,
-            Message::LocalTemperatureMeasurementRequest(_) => 0x13,
-            Message::LocalTemperatureMeasurementResponse(_) => 0x13,
-            Message::GlobalTemperatureMeasurementRequest(_) => 0x14,
-            Message::GlobalTemperatureMeasurementResponse(_) => 0x14,
-            Message::LaserDistanceRequest(_) => 0x15,
-            Message::LaserDistanceResponse(_) => 0x15,
-            Message::MaxZoomRangeRequest(_) => 0x16,
-            Message::MaxZoomRangeResponse(_) => 0x16,
-            Message::LaserTargetLocationRequest(_) => 0x17,
-            Message::LaserTargetLocationResponse(_) => 0x17,
-            Message::CurrentZoomRequest(_) => 0x18,
-            Message::CurrentZoomResponse(_) => 0x18,
-            Message::GimbalModeRequest(_) => 0x19,
-            Message::GimbalModeResponse(_) => 0x19,
-            Message::PseudoColorRequest(_) => 0x1A,
-            Message::PseudoColorResponse(_) => 0x1A,
-            Message::SetPseudoColorRequest(_) => 0x1B,
-            Message::SetPseudoColorResponse(_) => 0x1B,
-            Message::EncodingParamsRequest(_) => 0x20,
-            Message::EncodingParamsResponse(_) => 0x20,
-            Message::SetEncodingParamsRequest(_) => 0x21,
-            Message::SetEncodingParamsResponse(_) => 0x21,
-            Message::SendAircraftAttitude(_) => 0x22,
-            Message::SendRcChannelDataRequest(_) => 0x23,
-            Message::RequestFlightControllerDataStreamRequest(_) => 0x24,
-            Message::RequestFlightControllerDataStreamResponse(_) => 0x24,
-            Message::RequestDataStreamRequest(_) => 0x25,
-            Message::RequestDataStreamResponse(_) => 0x25,
-            Message::MagneticEncoderAngleRequest(_) => 0x26,
-            Message::MagneticEncoderAngleResponse(_) => 0x26,
-            Message::GimbalControlModeRequest(_) => 0x27,
-            Message::GimbalControlModeResponse(_) => 0x27,
-            Message::WeakControlThresholdRequest(_) => 0x28,
-            Message::WeakControlThresholdResponse(_) => 0x28,
-            Message::SetWeakControlThresholdRequest(_) => 0x29,
-            Message::SetWeakControlThresholdResponse(_) => 0x29,
-            Message::MotorVoltageRequest(_) => 0x2A,
-            Message::MotorVoltageResponse(_) => 0x2A,
-            Message::SetUtcTimeRequest(_) => 0x30,
-            Message::SetUtcTimeResponse(_) => 0x30,
-            Message::GimbalSystemInfoRequest(_) => 0x31,
-            Message::GimbalSystemInfoResponse(_) => 0x31,
-            Message::SetLaserStateRequest(_) => 0x32,
-            Message::SetLaserStateResponse(_) => 0x32,
-            Message::ThermalOutputModeRequest(_) => 0x33,
-            Message::ThermalOutputModeResponse(_) => 0x33,
-            Message::SetThermalOutputModeRequest(_) => 0x34,
-            Message::SetThermalOutputModeResponse(_) => 0x34,
-            Message::GetSingleTemperatureFrameRequest(_) => 0x35,
-            Message::GetSingleTemperatureFrameResponse(_) => 0x35,
-            Message::ThermalGainModeRequest(_) => 0x37,
-            Message::ThermalGainModeResponse(_) => 0x37,
-            Message::SetThermalGainModeRequest(_) => 0x38,
-            Message::SetThermalGainModeResponse(_) => 0x38,
-            Message::ThermalEnvCorrectionParamsRequest(_) => 0x39,
-            Message::ThermalEnvCorrectionParamsResponse(_) => 0x39,
-            Message::SetThermalEnvCorrectionParamsRequest(_) => 0x3A,
-            Message::SetThermalEnvCorrectionParamsResponse(_) => 0x3A,
-            Message::ThermalEnvCorrectionSwitchRequest(_) => 0x3B,
-            Message::ThermalEnvCorrectionSwitchResponse(_) => 0x3B,
-            Message::SetThermalEnvCorrectionSwitchRequest(_) => 0x3C,
-            Message::SetThermalEnvCorrectionSwitchResponse(_) => 0x3C,
-            Message::SendGpsData(_) => 0x3E,
-            Message::SystemTimeRequest(_) => 0x40,
-            Message::SystemTimeResponse(_) => 0x40,
-            Message::SingleAxisAttitudeRequest(_) => 0x41,
-            Message::SingleAxisAttitudeResponse(_) => 0x41,
-            Message::ThermalThresholdSwitchRequest(_) => 0x42,
-            Message::ThermalThresholdSwitchResponse(_) => 0x42,
-            Message::SetThermalThresholdSwitchRequest(_) => 0x43,
-            Message::SetThermalThresholdSwitchResponse(_) => 0x43,
-            Message::ThermalThresholdParamsRequest(_) => 0x44,
-            Message::ThermalThresholdParamsResponse(_) => 0x44,
-            Message::SetThermalThresholdParamsRequest(_) => 0x45,
-            Message::SetThermalThresholdParamsResponse(_) => 0x45,
-            Message::ThermalThresholdPrecisionRequest(_) => 0x46,
-            Message::ThermalThresholdPrecisionResponse(_) => 0x46,
-            Message::SetThermalThresholdPrecisionRequest(_) => 0x47,
-            Message::SetThermalThresholdPrecisionResponse(_) => 0x47,
-            Message::FormatSdCardRequest(_) => 0x48,
-            Message::FormatSdCardResponse(_) => 0x48,
-            Message::GetPictureNameTypeRequest(_) => 0x49,
-            Message::GetPictureNameTypeResponse(_) => 0x49,
-            Message::SetPictureNameTypeRequest(_) => 0x4A,
-            Message::SetPictureNameTypeResponse(_) => 0x4A,
-            Message::HdmiOsdStatusRequest(_) => 0x4B,
-            Message::HdmiOsdStatusResponse(_) => 0x4B,
-            Message::SetHdmiOsdStatusRequest(_) => 0x4C,
-            Message::SetHdmiOsdStatusResponse(_) => 0x4C,
-            Message::AiModeStatusRequest(_) => 0x4D,
-            Message::AiModeStatusResponse(_) => 0x4D,
-            Message::AiTrackingStreamStatusRequest(_) => 0x4E,
-            Message::AiTrackingStreamStatusResponse(_) => 0x4E,
-            Message::UpdateThermalShutterRequest(_) => 0x4F,
-            Message::UpdateThermalShutterResponse(_) => 0x4F,
-            Message::AiTrackingCoordinateStream(_) => 0x50,
-            Message::SetAiTrackingStreamStatusRequest(_) => 0x51,
-            Message::SetAiTrackingStreamStatusResponse(_) => 0x51,
-            Message::WeakControlModeRequest(_) => 0x70,
-            Message::WeakControlModeResponse(_) => 0x70,
-            Message::SetWeakControlModeRequest(_) => 0x71,
-            Message::SetWeakControlModeResponse(_) => 0x71,
-            Message::SoftRebootRequest(_) => 0x80,
-            Message::SoftRebootResponse(_) => 0x80,
-            Message::GetIpAddressRequest(_) => 0x81,
-            Message::GetIpAddressResponse(_) => 0x81,
-            Message::SetIpAddressRequest(_) => 0x82,
-            Message::SetIpAddressResponse(_) => 0x82,
+            Self::TcpHeartbeat(_) => TcpHeartbeat::CMD_ID,
+            Self::FirmwareVersionRequest(_) => FirmwareVersionRequest::CMD_ID,
+            Self::FirmwareVersionResponse(_) => FirmwareVersionResponse::CMD_ID,
+            Self::HardwareIdRequest(_) => HardwareIdRequest::CMD_ID,
+            Self::HardwareIdResponse(_) => HardwareIdResponse::CMD_ID,
+            Self::AutoFocusRequest(_) => AutoFocusRequest::CMD_ID,
+            Self::AutoFocusResponse(_) => AutoFocusResponse::CMD_ID,
+            Self::ManualZoomRequest(_) => ManualZoomRequest::CMD_ID,
+            Self::ManualZoomResponse(_) => ManualZoomResponse::CMD_ID,
+            Self::ManualFocusRequest(_) => ManualFocusRequest::CMD_ID,
+            Self::ManualFocusResponse(_) => ManualFocusResponse::CMD_ID,
+            Self::GimbalRotationRequest(_) => GimbalRotationRequest::CMD_ID,
+            Self::GimbalRotationResponse(_) => GimbalRotationResponse::CMD_ID,
+            Self::CenterGimbalRequest(_) => CenterGimbalRequest::CMD_ID,
+            Self::CenterGimbalResponse(_) => CenterGimbalResponse::CMD_ID,
+            Self::CameraSystemInfoRequest(_) => CameraSystemInfoRequest::CMD_ID,
+            Self::CameraSystemInfoResponse(_) => CameraSystemInfoResponse::CMD_ID,
+            Self::FunctionFeedback(_) => FunctionFeedback::CMD_ID,
+            Self::FunctionControl(_) => FunctionControl::CMD_ID,
+            Self::GimbalAttitudeRequest(_) => GimbalAttitudeRequest::CMD_ID,
+            Self::GimbalAttitudeResponse(_) => GimbalAttitudeResponse::CMD_ID,
+            Self::SetGimbalAttitudeRequest(_) => SetGimbalAttitudeRequest::CMD_ID,
+            Self::SetGimbalAttitudeResponse(_) => SetGimbalAttitudeResponse::CMD_ID,
+            Self::AbsoluteZoomRequest(_) => AbsoluteZoomRequest::CMD_ID,
+            Self::AbsoluteZoomResponse(_) => AbsoluteZoomResponse::CMD_ID,
+            Self::VideoStitchingModeRequest(_) => VideoStitchingModeRequest::CMD_ID,
+            Self::VideoStitchingModeResponse(_) => VideoStitchingModeResponse::CMD_ID,
+            Self::SetVideoStitchingModeRequest(_) => SetVideoStitchingModeRequest::CMD_ID,
+            Self::SetVideoStitchingModeResponse(_) => SetVideoStitchingModeResponse::CMD_ID,
+            Self::GetTemperatureAtPointRequest(_) => GetTemperatureAtPointRequest::CMD_ID,
+            Self::GetTemperatureAtPointResponse(_) => GetTemperatureAtPointResponse::CMD_ID,
+            Self::LocalTemperatureMeasurementRequest(_) => {
+                LocalTemperatureMeasurementRequest::CMD_ID
+            }
+            Self::LocalTemperatureMeasurementResponse(_) => {
+                LocalTemperatureMeasurementResponse::CMD_ID
+            }
+            Self::GlobalTemperatureMeasurementRequest(_) => {
+                GlobalTemperatureMeasurementRequest::CMD_ID
+            }
+            Self::GlobalTemperatureMeasurementResponse(_) => {
+                GlobalTemperatureMeasurementResponse::CMD_ID
+            }
+            Self::PseudoColorRequest(_) => PseudoColorRequest::CMD_ID,
+            Self::PseudoColorResponse(_) => PseudoColorResponse::CMD_ID,
+            Self::SetPseudoColorRequest(_) => SetPseudoColorRequest::CMD_ID,
+            Self::SetPseudoColorResponse(_) => SetPseudoColorResponse::CMD_ID,
+            Self::EncodingParamsRequest(_) => EncodingParamsRequest::CMD_ID,
+            Self::EncodingParamsResponse(_) => EncodingParamsResponse::CMD_ID,
+            Self::SetEncodingParamsRequest(_) => SetEncodingParamsRequest::CMD_ID,
+            Self::SetEncodingParamsResponse(_) => SetEncodingParamsResponse::CMD_ID,
+            Self::SendAircraftAttitude(_) => SendAircraftAttitude::CMD_ID,
+            Self::SendRcChannelDataRequest(_) => SendRcChannelDataRequest::CMD_ID,
+            Self::RequestFlightControllerDataStreamRequest(_) => {
+                RequestFlightControllerDataStreamRequest::CMD_ID
+            }
+            Self::RequestFlightControllerDataStreamResponse(_) => {
+                RequestFlightControllerDataStreamResponse::CMD_ID
+            }
+            Self::SetUtcTimeRequest(_) => SetUtcTimeRequest::CMD_ID,
+            Self::SetUtcTimeResponse(_) => SetUtcTimeResponse::CMD_ID,
+            Self::ThermalOutputModeRequest(_) => ThermalOutputModeRequest::CMD_ID,
+            Self::ThermalOutputModeResponse(_) => ThermalOutputModeResponse::CMD_ID,
+            Self::SetThermalOutputModeRequest(_) => SetThermalOutputModeRequest::CMD_ID,
+            Self::SetThermalOutputModeResponse(_) => SetThermalOutputModeResponse::CMD_ID,
+            Self::GetSingleTemperatureFrameRequest(_) => GetSingleTemperatureFrameRequest::CMD_ID,
+            Self::GetSingleTemperatureFrameResponse(_) => GetSingleTemperatureFrameResponse::CMD_ID,
+            Self::ThermalGainModeRequest(_) => ThermalGainModeRequest::CMD_ID,
+            Self::ThermalGainModeResponse(_) => ThermalGainModeResponse::CMD_ID,
+            Self::SetThermalGainModeRequest(_) => SetThermalGainModeRequest::CMD_ID,
+            Self::SetThermalGainModeResponse(_) => SetThermalGainModeResponse::CMD_ID,
+            Self::ThermalEnvCorrectionParamsRequest(_) => ThermalEnvCorrectionParamsRequest::CMD_ID,
+            Self::ThermalEnvCorrectionParamsResponse(_) => {
+                ThermalEnvCorrectionParamsResponse::CMD_ID
+            }
+            Self::SetThermalEnvCorrectionParamsRequest(_) => {
+                SetThermalEnvCorrectionParamsRequest::CMD_ID
+            }
+            Self::SetThermalEnvCorrectionParamsResponse(_) => {
+                SetThermalEnvCorrectionParamsResponse::CMD_ID
+            }
+            Self::ThermalEnvCorrectionSwitchRequest(_) => ThermalEnvCorrectionSwitchRequest::CMD_ID,
+            Self::ThermalEnvCorrectionSwitchResponse(_) => {
+                ThermalEnvCorrectionSwitchResponse::CMD_ID
+            }
+            Self::SetThermalEnvCorrectionSwitchRequest(_) => {
+                SetThermalEnvCorrectionSwitchRequest::CMD_ID
+            }
+            Self::SetThermalEnvCorrectionSwitchResponse(_) => {
+                SetThermalEnvCorrectionSwitchResponse::CMD_ID
+            }
+            Self::SendGpsData(_) => SendGpsData::CMD_ID,
+            Self::SystemTimeRequest(_) => SystemTimeRequest::CMD_ID,
+            Self::SystemTimeResponse(_) => SystemTimeResponse::CMD_ID,
+            Self::SingleAxisAttitudeRequest(_) => SingleAxisAttitudeRequest::CMD_ID,
+            Self::SingleAxisAttitudeResponse(_) => SingleAxisAttitudeResponse::CMD_ID,
+            Self::ThermalThresholdSwitchRequest(_) => ThermalThresholdSwitchRequest::CMD_ID,
+            Self::ThermalThresholdSwitchResponse(_) => ThermalThresholdSwitchResponse::CMD_ID,
+            Self::SetThermalThresholdSwitchRequest(_) => SetThermalThresholdSwitchRequest::CMD_ID,
+            Self::SetThermalThresholdSwitchResponse(_) => SetThermalThresholdSwitchResponse::CMD_ID,
+            Self::ThermalThresholdParamsRequest(_) => ThermalThresholdParamsRequest::CMD_ID,
+            Self::ThermalThresholdParamsResponse(_) => ThermalThresholdParamsResponse::CMD_ID,
+            Self::SetThermalThresholdParamsRequest(_) => SetThermalThresholdParamsRequest::CMD_ID,
+            Self::SetThermalThresholdParamsResponse(_) => SetThermalThresholdParamsResponse::CMD_ID,
+            Self::ThermalThresholdPrecisionRequest(_) => ThermalThresholdPrecisionRequest::CMD_ID,
+            Self::ThermalThresholdPrecisionResponse(_) => ThermalThresholdPrecisionResponse::CMD_ID,
+            Self::SetThermalThresholdPrecisionRequest(_) => {
+                SetThermalThresholdPrecisionRequest::CMD_ID
+            }
+            Self::SetThermalThresholdPrecisionResponse(_) => {
+                SetThermalThresholdPrecisionResponse::CMD_ID
+            }
+            Self::FormatSdCardRequest(_) => FormatSdCardRequest::CMD_ID,
+            Self::FormatSdCardResponse(_) => FormatSdCardResponse::CMD_ID,
+            Self::GetPictureNameTypeRequest(_) => GetPictureNameTypeRequest::CMD_ID,
+            Self::GetPictureNameTypeResponse(_) => GetPictureNameTypeResponse::CMD_ID,
+            Self::SetPictureNameTypeRequest(_) => SetPictureNameTypeRequest::CMD_ID,
+            Self::SetPictureNameTypeResponse(_) => SetPictureNameTypeResponse::CMD_ID,
+            Self::HdmiOsdStatusRequest(_) => HdmiOsdStatusRequest::CMD_ID,
+            Self::HdmiOsdStatusResponse(_) => HdmiOsdStatusResponse::CMD_ID,
+            Self::SetHdmiOsdStatusRequest(_) => SetHdmiOsdStatusRequest::CMD_ID,
+            Self::SetHdmiOsdStatusResponse(_) => SetHdmiOsdStatusResponse::CMD_ID,
+            Self::AiModeStatusRequest(_) => AiModeStatusRequest::CMD_ID,
+            Self::AiModeStatusResponse(_) => AiModeStatusResponse::CMD_ID,
+            Self::AiTrackingStreamStatusRequest(_) => AiTrackingStreamStatusRequest::CMD_ID,
+            Self::AiTrackingStreamStatusResponse(_) => AiTrackingStreamStatusResponse::CMD_ID,
+            Self::UpdateThermalShutterRequest(_) => UpdateThermalShutterRequest::CMD_ID,
+            Self::UpdateThermalShutterResponse(_) => UpdateThermalShutterResponse::CMD_ID,
+            Self::AiTrackingCoordinateStream(_) => AiTrackingCoordinateStream::CMD_ID,
+            Self::SetAiTrackingStreamStatusRequest(_) => SetAiTrackingStreamStatusRequest::CMD_ID,
+            Self::SetAiTrackingStreamStatusResponse(_) => SetAiTrackingStreamStatusResponse::CMD_ID,
+            Self::SoftRebootRequest(_) => SoftRebootRequest::CMD_ID,
+            Self::SoftRebootResponse(_) => SoftRebootResponse::CMD_ID,
+            Self::GetIpAddressRequest(_) => GetIpAddressRequest::CMD_ID,
+            Self::GetIpAddressResponse(_) => GetIpAddressResponse::CMD_ID,
+            Self::SetIpAddressRequest(_) => SetIpAddressRequest::CMD_ID,
+            Self::SetIpAddressResponse(_) => SetIpAddressResponse::CMD_ID,
         }
     }
-    pub fn is_request(&self) -> bool {
+    pub const fn is_request(&self) -> bool {
         match self {
-            Message::TcpHeartbeat(_) => true,
-            Message::FirmwareVersionRequest(_) => true,
-            Message::FirmwareVersionResponse(_) => false,
-            Message::HardwareIdRequest(_) => true,
-            Message::HardwareIdResponse(_) => false,
-            Message::AutoFocusRequest(_) => true,
-            Message::AutoFocusResponse(_) => false,
-            Message::ManualZoomRequest(_) => true,
-            Message::ManualZoomResponse(_) => false,
-            Message::ManualFocusRequest(_) => true,
-            Message::ManualFocusResponse(_) => false,
-            Message::GimbalRotationRequest(_) => true,
-            Message::GimbalRotationResponse(_) => false,
-            Message::CenterGimbalRequest(_) => true,
-            Message::CenterGimbalResponse(_) => false,
-            Message::CameraSystemInfoRequest(_) => true,
-            Message::CameraSystemInfoResponse(_) => false,
-            Message::FunctionFeedback(_) => false,
-            Message::FunctionControl(_) => true,
-            Message::GimbalAttitudeRequest(_) => true,
-            Message::GimbalAttitudeResponse(_) => false,
-            Message::SetGimbalAttitudeRequest(_) => true,
-            Message::SetGimbalAttitudeResponse(_) => false,
-            Message::AbsoluteZoomRequest(_) => true,
-            Message::AbsoluteZoomResponse(_) => false,
-            Message::VideoStitchingModeRequest(_) => true,
-            Message::VideoStitchingModeResponse(_) => false,
-            Message::SetVideoStitchingModeRequest(_) => true,
-            Message::SetVideoStitchingModeResponse(_) => false,
-            Message::GetTemperatureAtPointRequest(_) => true,
-            Message::GetTemperatureAtPointResponse(_) => false,
-            Message::LocalTemperatureMeasurementRequest(_) => true,
-            Message::LocalTemperatureMeasurementResponse(_) => false,
-            Message::GlobalTemperatureMeasurementRequest(_) => true,
-            Message::GlobalTemperatureMeasurementResponse(_) => false,
-            Message::LaserDistanceRequest(_) => true,
-            Message::LaserDistanceResponse(_) => false,
-            Message::MaxZoomRangeRequest(_) => true,
-            Message::MaxZoomRangeResponse(_) => false,
-            Message::LaserTargetLocationRequest(_) => true,
-            Message::LaserTargetLocationResponse(_) => false,
-            Message::CurrentZoomRequest(_) => true,
-            Message::CurrentZoomResponse(_) => false,
-            Message::GimbalModeRequest(_) => true,
-            Message::GimbalModeResponse(_) => false,
-            Message::PseudoColorRequest(_) => true,
-            Message::PseudoColorResponse(_) => false,
-            Message::SetPseudoColorRequest(_) => true,
-            Message::SetPseudoColorResponse(_) => false,
-            Message::EncodingParamsRequest(_) => true,
-            Message::EncodingParamsResponse(_) => false,
-            Message::SetEncodingParamsRequest(_) => true,
-            Message::SetEncodingParamsResponse(_) => false,
-            Message::SendAircraftAttitude(_) => true,
-            Message::SendRcChannelDataRequest(_) => true,
-            Message::RequestFlightControllerDataStreamRequest(_) => true,
-            Message::RequestFlightControllerDataStreamResponse(_) => false,
-            Message::RequestDataStreamRequest(_) => true,
-            Message::RequestDataStreamResponse(_) => false,
-            Message::MagneticEncoderAngleRequest(_) => true,
-            Message::MagneticEncoderAngleResponse(_) => false,
-            Message::GimbalControlModeRequest(_) => true,
-            Message::GimbalControlModeResponse(_) => false,
-            Message::WeakControlThresholdRequest(_) => true,
-            Message::WeakControlThresholdResponse(_) => false,
-            Message::SetWeakControlThresholdRequest(_) => true,
-            Message::SetWeakControlThresholdResponse(_) => false,
-            Message::MotorVoltageRequest(_) => true,
-            Message::MotorVoltageResponse(_) => false,
-            Message::SetUtcTimeRequest(_) => true,
-            Message::SetUtcTimeResponse(_) => false,
-            Message::GimbalSystemInfoRequest(_) => true,
-            Message::GimbalSystemInfoResponse(_) => false,
-            Message::SetLaserStateRequest(_) => true,
-            Message::SetLaserStateResponse(_) => false,
-            Message::ThermalOutputModeRequest(_) => true,
-            Message::ThermalOutputModeResponse(_) => false,
-            Message::SetThermalOutputModeRequest(_) => true,
-            Message::SetThermalOutputModeResponse(_) => false,
-            Message::GetSingleTemperatureFrameRequest(_) => true,
-            Message::GetSingleTemperatureFrameResponse(_) => false,
-            Message::ThermalGainModeRequest(_) => true,
-            Message::ThermalGainModeResponse(_) => false,
-            Message::SetThermalGainModeRequest(_) => true,
-            Message::SetThermalGainModeResponse(_) => false,
-            Message::ThermalEnvCorrectionParamsRequest(_) => true,
-            Message::ThermalEnvCorrectionParamsResponse(_) => false,
-            Message::SetThermalEnvCorrectionParamsRequest(_) => true,
-            Message::SetThermalEnvCorrectionParamsResponse(_) => false,
-            Message::ThermalEnvCorrectionSwitchRequest(_) => true,
-            Message::ThermalEnvCorrectionSwitchResponse(_) => false,
-            Message::SetThermalEnvCorrectionSwitchRequest(_) => true,
-            Message::SetThermalEnvCorrectionSwitchResponse(_) => false,
-            Message::SendGpsData(_) => true,
-            Message::SystemTimeRequest(_) => true,
-            Message::SystemTimeResponse(_) => false,
-            Message::SingleAxisAttitudeRequest(_) => true,
-            Message::SingleAxisAttitudeResponse(_) => false,
-            Message::ThermalThresholdSwitchRequest(_) => true,
-            Message::ThermalThresholdSwitchResponse(_) => false,
-            Message::SetThermalThresholdSwitchRequest(_) => true,
-            Message::SetThermalThresholdSwitchResponse(_) => false,
-            Message::ThermalThresholdParamsRequest(_) => true,
-            Message::ThermalThresholdParamsResponse(_) => false,
-            Message::SetThermalThresholdParamsRequest(_) => true,
-            Message::SetThermalThresholdParamsResponse(_) => false,
-            Message::ThermalThresholdPrecisionRequest(_) => true,
-            Message::ThermalThresholdPrecisionResponse(_) => false,
-            Message::SetThermalThresholdPrecisionRequest(_) => true,
-            Message::SetThermalThresholdPrecisionResponse(_) => false,
-            Message::FormatSdCardRequest(_) => true,
-            Message::FormatSdCardResponse(_) => false,
-            Message::GetPictureNameTypeRequest(_) => true,
-            Message::GetPictureNameTypeResponse(_) => false,
-            Message::SetPictureNameTypeRequest(_) => true,
-            Message::SetPictureNameTypeResponse(_) => false,
-            Message::HdmiOsdStatusRequest(_) => true,
-            Message::HdmiOsdStatusResponse(_) => false,
-            Message::SetHdmiOsdStatusRequest(_) => true,
-            Message::SetHdmiOsdStatusResponse(_) => false,
-            Message::AiModeStatusRequest(_) => true,
-            Message::AiModeStatusResponse(_) => false,
-            Message::AiTrackingStreamStatusRequest(_) => true,
-            Message::AiTrackingStreamStatusResponse(_) => false,
-            Message::UpdateThermalShutterRequest(_) => true,
-            Message::UpdateThermalShutterResponse(_) => false,
-            Message::AiTrackingCoordinateStream(_) => false,
-            Message::SetAiTrackingStreamStatusRequest(_) => true,
-            Message::SetAiTrackingStreamStatusResponse(_) => false,
-            Message::WeakControlModeRequest(_) => true,
-            Message::WeakControlModeResponse(_) => false,
-            Message::SetWeakControlModeRequest(_) => true,
-            Message::SetWeakControlModeResponse(_) => false,
-            Message::SoftRebootRequest(_) => true,
-            Message::SoftRebootResponse(_) => false,
-            Message::GetIpAddressRequest(_) => true,
-            Message::GetIpAddressResponse(_) => false,
-            Message::SetIpAddressRequest(_) => true,
-            Message::SetIpAddressResponse(_) => false,
+            Self::TcpHeartbeat(_) => TcpHeartbeat::IS_REQUEST,
+            Self::FirmwareVersionRequest(_) => FirmwareVersionRequest::IS_REQUEST,
+            Self::FirmwareVersionResponse(_) => FirmwareVersionResponse::IS_REQUEST,
+            Self::HardwareIdRequest(_) => HardwareIdRequest::IS_REQUEST,
+            Self::HardwareIdResponse(_) => HardwareIdResponse::IS_REQUEST,
+            Self::AutoFocusRequest(_) => AutoFocusRequest::IS_REQUEST,
+            Self::AutoFocusResponse(_) => AutoFocusResponse::IS_REQUEST,
+            Self::ManualZoomRequest(_) => ManualZoomRequest::IS_REQUEST,
+            Self::ManualZoomResponse(_) => ManualZoomResponse::IS_REQUEST,
+            Self::ManualFocusRequest(_) => ManualFocusRequest::IS_REQUEST,
+            Self::ManualFocusResponse(_) => ManualFocusResponse::IS_REQUEST,
+            Self::GimbalRotationRequest(_) => GimbalRotationRequest::IS_REQUEST,
+            Self::GimbalRotationResponse(_) => GimbalRotationResponse::IS_REQUEST,
+            Self::CenterGimbalRequest(_) => CenterGimbalRequest::IS_REQUEST,
+            Self::CenterGimbalResponse(_) => CenterGimbalResponse::IS_REQUEST,
+            Self::CameraSystemInfoRequest(_) => CameraSystemInfoRequest::IS_REQUEST,
+            Self::CameraSystemInfoResponse(_) => CameraSystemInfoResponse::IS_REQUEST,
+            Self::FunctionFeedback(_) => FunctionFeedback::IS_REQUEST,
+            Self::FunctionControl(_) => FunctionControl::IS_REQUEST,
+            Self::GimbalAttitudeRequest(_) => GimbalAttitudeRequest::IS_REQUEST,
+            Self::GimbalAttitudeResponse(_) => GimbalAttitudeResponse::IS_REQUEST,
+            Self::SetGimbalAttitudeRequest(_) => SetGimbalAttitudeRequest::IS_REQUEST,
+            Self::SetGimbalAttitudeResponse(_) => SetGimbalAttitudeResponse::IS_REQUEST,
+            Self::AbsoluteZoomRequest(_) => AbsoluteZoomRequest::IS_REQUEST,
+            Self::AbsoluteZoomResponse(_) => AbsoluteZoomResponse::IS_REQUEST,
+            Self::VideoStitchingModeRequest(_) => VideoStitchingModeRequest::IS_REQUEST,
+            Self::VideoStitchingModeResponse(_) => VideoStitchingModeResponse::IS_REQUEST,
+            Self::SetVideoStitchingModeRequest(_) => SetVideoStitchingModeRequest::IS_REQUEST,
+            Self::SetVideoStitchingModeResponse(_) => SetVideoStitchingModeResponse::IS_REQUEST,
+            Self::GetTemperatureAtPointRequest(_) => GetTemperatureAtPointRequest::IS_REQUEST,
+            Self::GetTemperatureAtPointResponse(_) => GetTemperatureAtPointResponse::IS_REQUEST,
+            Self::LocalTemperatureMeasurementRequest(_) => {
+                LocalTemperatureMeasurementRequest::IS_REQUEST
+            }
+            Self::LocalTemperatureMeasurementResponse(_) => {
+                LocalTemperatureMeasurementResponse::IS_REQUEST
+            }
+            Self::GlobalTemperatureMeasurementRequest(_) => {
+                GlobalTemperatureMeasurementRequest::IS_REQUEST
+            }
+            Self::GlobalTemperatureMeasurementResponse(_) => {
+                GlobalTemperatureMeasurementResponse::IS_REQUEST
+            }
+            Self::PseudoColorRequest(_) => PseudoColorRequest::IS_REQUEST,
+            Self::PseudoColorResponse(_) => PseudoColorResponse::IS_REQUEST,
+            Self::SetPseudoColorRequest(_) => SetPseudoColorRequest::IS_REQUEST,
+            Self::SetPseudoColorResponse(_) => SetPseudoColorResponse::IS_REQUEST,
+            Self::EncodingParamsRequest(_) => EncodingParamsRequest::IS_REQUEST,
+            Self::EncodingParamsResponse(_) => EncodingParamsResponse::IS_REQUEST,
+            Self::SetEncodingParamsRequest(_) => SetEncodingParamsRequest::IS_REQUEST,
+            Self::SetEncodingParamsResponse(_) => SetEncodingParamsResponse::IS_REQUEST,
+            Self::SendAircraftAttitude(_) => SendAircraftAttitude::IS_REQUEST,
+            Self::SendRcChannelDataRequest(_) => SendRcChannelDataRequest::IS_REQUEST,
+            Self::RequestFlightControllerDataStreamRequest(_) => {
+                RequestFlightControllerDataStreamRequest::IS_REQUEST
+            }
+            Self::RequestFlightControllerDataStreamResponse(_) => {
+                RequestFlightControllerDataStreamResponse::IS_REQUEST
+            }
+            Self::SetUtcTimeRequest(_) => SetUtcTimeRequest::IS_REQUEST,
+            Self::SetUtcTimeResponse(_) => SetUtcTimeResponse::IS_REQUEST,
+            Self::ThermalOutputModeRequest(_) => ThermalOutputModeRequest::IS_REQUEST,
+            Self::ThermalOutputModeResponse(_) => ThermalOutputModeResponse::IS_REQUEST,
+            Self::SetThermalOutputModeRequest(_) => SetThermalOutputModeRequest::IS_REQUEST,
+            Self::SetThermalOutputModeResponse(_) => SetThermalOutputModeResponse::IS_REQUEST,
+            Self::GetSingleTemperatureFrameRequest(_) => {
+                GetSingleTemperatureFrameRequest::IS_REQUEST
+            }
+            Self::GetSingleTemperatureFrameResponse(_) => {
+                GetSingleTemperatureFrameResponse::IS_REQUEST
+            }
+            Self::ThermalGainModeRequest(_) => ThermalGainModeRequest::IS_REQUEST,
+            Self::ThermalGainModeResponse(_) => ThermalGainModeResponse::IS_REQUEST,
+            Self::SetThermalGainModeRequest(_) => SetThermalGainModeRequest::IS_REQUEST,
+            Self::SetThermalGainModeResponse(_) => SetThermalGainModeResponse::IS_REQUEST,
+            Self::ThermalEnvCorrectionParamsRequest(_) => {
+                ThermalEnvCorrectionParamsRequest::IS_REQUEST
+            }
+            Self::ThermalEnvCorrectionParamsResponse(_) => {
+                ThermalEnvCorrectionParamsResponse::IS_REQUEST
+            }
+            Self::SetThermalEnvCorrectionParamsRequest(_) => {
+                SetThermalEnvCorrectionParamsRequest::IS_REQUEST
+            }
+            Self::SetThermalEnvCorrectionParamsResponse(_) => {
+                SetThermalEnvCorrectionParamsResponse::IS_REQUEST
+            }
+            Self::ThermalEnvCorrectionSwitchRequest(_) => {
+                ThermalEnvCorrectionSwitchRequest::IS_REQUEST
+            }
+            Self::ThermalEnvCorrectionSwitchResponse(_) => {
+                ThermalEnvCorrectionSwitchResponse::IS_REQUEST
+            }
+            Self::SetThermalEnvCorrectionSwitchRequest(_) => {
+                SetThermalEnvCorrectionSwitchRequest::IS_REQUEST
+            }
+            Self::SetThermalEnvCorrectionSwitchResponse(_) => {
+                SetThermalEnvCorrectionSwitchResponse::IS_REQUEST
+            }
+            Self::SendGpsData(_) => SendGpsData::IS_REQUEST,
+            Self::SystemTimeRequest(_) => SystemTimeRequest::IS_REQUEST,
+            Self::SystemTimeResponse(_) => SystemTimeResponse::IS_REQUEST,
+            Self::SingleAxisAttitudeRequest(_) => SingleAxisAttitudeRequest::IS_REQUEST,
+            Self::SingleAxisAttitudeResponse(_) => SingleAxisAttitudeResponse::IS_REQUEST,
+            Self::ThermalThresholdSwitchRequest(_) => ThermalThresholdSwitchRequest::IS_REQUEST,
+            Self::ThermalThresholdSwitchResponse(_) => ThermalThresholdSwitchResponse::IS_REQUEST,
+            Self::SetThermalThresholdSwitchRequest(_) => {
+                SetThermalThresholdSwitchRequest::IS_REQUEST
+            }
+            Self::SetThermalThresholdSwitchResponse(_) => {
+                SetThermalThresholdSwitchResponse::IS_REQUEST
+            }
+            Self::ThermalThresholdParamsRequest(_) => ThermalThresholdParamsRequest::IS_REQUEST,
+            Self::ThermalThresholdParamsResponse(_) => ThermalThresholdParamsResponse::IS_REQUEST,
+            Self::SetThermalThresholdParamsRequest(_) => {
+                SetThermalThresholdParamsRequest::IS_REQUEST
+            }
+            Self::SetThermalThresholdParamsResponse(_) => {
+                SetThermalThresholdParamsResponse::IS_REQUEST
+            }
+            Self::ThermalThresholdPrecisionRequest(_) => {
+                ThermalThresholdPrecisionRequest::IS_REQUEST
+            }
+            Self::ThermalThresholdPrecisionResponse(_) => {
+                ThermalThresholdPrecisionResponse::IS_REQUEST
+            }
+            Self::SetThermalThresholdPrecisionRequest(_) => {
+                SetThermalThresholdPrecisionRequest::IS_REQUEST
+            }
+            Self::SetThermalThresholdPrecisionResponse(_) => {
+                SetThermalThresholdPrecisionResponse::IS_REQUEST
+            }
+            Self::FormatSdCardRequest(_) => FormatSdCardRequest::IS_REQUEST,
+            Self::FormatSdCardResponse(_) => FormatSdCardResponse::IS_REQUEST,
+            Self::GetPictureNameTypeRequest(_) => GetPictureNameTypeRequest::IS_REQUEST,
+            Self::GetPictureNameTypeResponse(_) => GetPictureNameTypeResponse::IS_REQUEST,
+            Self::SetPictureNameTypeRequest(_) => SetPictureNameTypeRequest::IS_REQUEST,
+            Self::SetPictureNameTypeResponse(_) => SetPictureNameTypeResponse::IS_REQUEST,
+            Self::HdmiOsdStatusRequest(_) => HdmiOsdStatusRequest::IS_REQUEST,
+            Self::HdmiOsdStatusResponse(_) => HdmiOsdStatusResponse::IS_REQUEST,
+            Self::SetHdmiOsdStatusRequest(_) => SetHdmiOsdStatusRequest::IS_REQUEST,
+            Self::SetHdmiOsdStatusResponse(_) => SetHdmiOsdStatusResponse::IS_REQUEST,
+            Self::AiModeStatusRequest(_) => AiModeStatusRequest::IS_REQUEST,
+            Self::AiModeStatusResponse(_) => AiModeStatusResponse::IS_REQUEST,
+            Self::AiTrackingStreamStatusRequest(_) => AiTrackingStreamStatusRequest::IS_REQUEST,
+            Self::AiTrackingStreamStatusResponse(_) => AiTrackingStreamStatusResponse::IS_REQUEST,
+            Self::UpdateThermalShutterRequest(_) => UpdateThermalShutterRequest::IS_REQUEST,
+            Self::UpdateThermalShutterResponse(_) => UpdateThermalShutterResponse::IS_REQUEST,
+            Self::AiTrackingCoordinateStream(_) => AiTrackingCoordinateStream::IS_REQUEST,
+            Self::SetAiTrackingStreamStatusRequest(_) => {
+                SetAiTrackingStreamStatusRequest::IS_REQUEST
+            }
+            Self::SetAiTrackingStreamStatusResponse(_) => {
+                SetAiTrackingStreamStatusResponse::IS_REQUEST
+            }
+            Self::SoftRebootRequest(_) => SoftRebootRequest::IS_REQUEST,
+            Self::SoftRebootResponse(_) => SoftRebootResponse::IS_REQUEST,
+            Self::GetIpAddressRequest(_) => GetIpAddressRequest::IS_REQUEST,
+            Self::GetIpAddressResponse(_) => GetIpAddressResponse::IS_REQUEST,
+            Self::SetIpAddressRequest(_) => SetIpAddressRequest::IS_REQUEST,
+            Self::SetIpAddressResponse(_) => SetIpAddressResponse::IS_REQUEST,
         }
     }
-    pub fn is_response(&self) -> bool {
+    pub const fn is_response(&self) -> bool {
         !self.is_request()
     }
     pub fn encode(&self, buf: &mut [u8]) -> Result<usize, EncodeError> {
         match self {
-            Message::TcpHeartbeat(m) => m.encode(buf),
-            Message::FirmwareVersionRequest(m) => m.encode(buf),
-            Message::FirmwareVersionResponse(m) => m.encode(buf),
-            Message::HardwareIdRequest(m) => m.encode(buf),
-            Message::HardwareIdResponse(m) => m.encode(buf),
-            Message::AutoFocusRequest(m) => m.encode(buf),
-            Message::AutoFocusResponse(m) => m.encode(buf),
-            Message::ManualZoomRequest(m) => m.encode(buf),
-            Message::ManualZoomResponse(m) => m.encode(buf),
-            Message::ManualFocusRequest(m) => m.encode(buf),
-            Message::ManualFocusResponse(m) => m.encode(buf),
-            Message::GimbalRotationRequest(m) => m.encode(buf),
-            Message::GimbalRotationResponse(m) => m.encode(buf),
-            Message::CenterGimbalRequest(m) => m.encode(buf),
-            Message::CenterGimbalResponse(m) => m.encode(buf),
-            Message::CameraSystemInfoRequest(m) => m.encode(buf),
-            Message::CameraSystemInfoResponse(m) => m.encode(buf),
-            Message::FunctionFeedback(m) => m.encode(buf),
-            Message::FunctionControl(m) => m.encode(buf),
-            Message::GimbalAttitudeRequest(m) => m.encode(buf),
-            Message::GimbalAttitudeResponse(m) => m.encode(buf),
-            Message::SetGimbalAttitudeRequest(m) => m.encode(buf),
-            Message::SetGimbalAttitudeResponse(m) => m.encode(buf),
-            Message::AbsoluteZoomRequest(m) => m.encode(buf),
-            Message::AbsoluteZoomResponse(m) => m.encode(buf),
-            Message::VideoStitchingModeRequest(m) => m.encode(buf),
-            Message::VideoStitchingModeResponse(m) => m.encode(buf),
-            Message::SetVideoStitchingModeRequest(m) => m.encode(buf),
-            Message::SetVideoStitchingModeResponse(m) => m.encode(buf),
-            Message::GetTemperatureAtPointRequest(m) => m.encode(buf),
-            Message::GetTemperatureAtPointResponse(m) => m.encode(buf),
-            Message::LocalTemperatureMeasurementRequest(m) => m.encode(buf),
-            Message::LocalTemperatureMeasurementResponse(m) => m.encode(buf),
-            Message::GlobalTemperatureMeasurementRequest(m) => m.encode(buf),
-            Message::GlobalTemperatureMeasurementResponse(m) => m.encode(buf),
-            Message::LaserDistanceRequest(m) => m.encode(buf),
-            Message::LaserDistanceResponse(m) => m.encode(buf),
-            Message::MaxZoomRangeRequest(m) => m.encode(buf),
-            Message::MaxZoomRangeResponse(m) => m.encode(buf),
-            Message::LaserTargetLocationRequest(m) => m.encode(buf),
-            Message::LaserTargetLocationResponse(m) => m.encode(buf),
-            Message::CurrentZoomRequest(m) => m.encode(buf),
-            Message::CurrentZoomResponse(m) => m.encode(buf),
-            Message::GimbalModeRequest(m) => m.encode(buf),
-            Message::GimbalModeResponse(m) => m.encode(buf),
-            Message::PseudoColorRequest(m) => m.encode(buf),
-            Message::PseudoColorResponse(m) => m.encode(buf),
-            Message::SetPseudoColorRequest(m) => m.encode(buf),
-            Message::SetPseudoColorResponse(m) => m.encode(buf),
-            Message::EncodingParamsRequest(m) => m.encode(buf),
-            Message::EncodingParamsResponse(m) => m.encode(buf),
-            Message::SetEncodingParamsRequest(m) => m.encode(buf),
-            Message::SetEncodingParamsResponse(m) => m.encode(buf),
-            Message::SendAircraftAttitude(m) => m.encode(buf),
-            Message::SendRcChannelDataRequest(m) => m.encode(buf),
-            Message::RequestFlightControllerDataStreamRequest(m) => m.encode(buf),
-            Message::RequestFlightControllerDataStreamResponse(m) => m.encode(buf),
-            Message::RequestDataStreamRequest(m) => m.encode(buf),
-            Message::RequestDataStreamResponse(m) => m.encode(buf),
-            Message::MagneticEncoderAngleRequest(m) => m.encode(buf),
-            Message::MagneticEncoderAngleResponse(m) => m.encode(buf),
-            Message::GimbalControlModeRequest(m) => m.encode(buf),
-            Message::GimbalControlModeResponse(m) => m.encode(buf),
-            Message::WeakControlThresholdRequest(m) => m.encode(buf),
-            Message::WeakControlThresholdResponse(m) => m.encode(buf),
-            Message::SetWeakControlThresholdRequest(m) => m.encode(buf),
-            Message::SetWeakControlThresholdResponse(m) => m.encode(buf),
-            Message::MotorVoltageRequest(m) => m.encode(buf),
-            Message::MotorVoltageResponse(m) => m.encode(buf),
-            Message::SetUtcTimeRequest(m) => m.encode(buf),
-            Message::SetUtcTimeResponse(m) => m.encode(buf),
-            Message::GimbalSystemInfoRequest(m) => m.encode(buf),
-            Message::GimbalSystemInfoResponse(m) => m.encode(buf),
-            Message::SetLaserStateRequest(m) => m.encode(buf),
-            Message::SetLaserStateResponse(m) => m.encode(buf),
-            Message::ThermalOutputModeRequest(m) => m.encode(buf),
-            Message::ThermalOutputModeResponse(m) => m.encode(buf),
-            Message::SetThermalOutputModeRequest(m) => m.encode(buf),
-            Message::SetThermalOutputModeResponse(m) => m.encode(buf),
-            Message::GetSingleTemperatureFrameRequest(m) => m.encode(buf),
-            Message::GetSingleTemperatureFrameResponse(m) => m.encode(buf),
-            Message::ThermalGainModeRequest(m) => m.encode(buf),
-            Message::ThermalGainModeResponse(m) => m.encode(buf),
-            Message::SetThermalGainModeRequest(m) => m.encode(buf),
-            Message::SetThermalGainModeResponse(m) => m.encode(buf),
-            Message::ThermalEnvCorrectionParamsRequest(m) => m.encode(buf),
-            Message::ThermalEnvCorrectionParamsResponse(m) => m.encode(buf),
-            Message::SetThermalEnvCorrectionParamsRequest(m) => m.encode(buf),
-            Message::SetThermalEnvCorrectionParamsResponse(m) => m.encode(buf),
-            Message::ThermalEnvCorrectionSwitchRequest(m) => m.encode(buf),
-            Message::ThermalEnvCorrectionSwitchResponse(m) => m.encode(buf),
-            Message::SetThermalEnvCorrectionSwitchRequest(m) => m.encode(buf),
-            Message::SetThermalEnvCorrectionSwitchResponse(m) => m.encode(buf),
-            Message::SendGpsData(m) => m.encode(buf),
-            Message::SystemTimeRequest(m) => m.encode(buf),
-            Message::SystemTimeResponse(m) => m.encode(buf),
-            Message::SingleAxisAttitudeRequest(m) => m.encode(buf),
-            Message::SingleAxisAttitudeResponse(m) => m.encode(buf),
-            Message::ThermalThresholdSwitchRequest(m) => m.encode(buf),
-            Message::ThermalThresholdSwitchResponse(m) => m.encode(buf),
-            Message::SetThermalThresholdSwitchRequest(m) => m.encode(buf),
-            Message::SetThermalThresholdSwitchResponse(m) => m.encode(buf),
-            Message::ThermalThresholdParamsRequest(m) => m.encode(buf),
-            Message::ThermalThresholdParamsResponse(m) => m.encode(buf),
-            Message::SetThermalThresholdParamsRequest(m) => m.encode(buf),
-            Message::SetThermalThresholdParamsResponse(m) => m.encode(buf),
-            Message::ThermalThresholdPrecisionRequest(m) => m.encode(buf),
-            Message::ThermalThresholdPrecisionResponse(m) => m.encode(buf),
-            Message::SetThermalThresholdPrecisionRequest(m) => m.encode(buf),
-            Message::SetThermalThresholdPrecisionResponse(m) => m.encode(buf),
-            Message::FormatSdCardRequest(m) => m.encode(buf),
-            Message::FormatSdCardResponse(m) => m.encode(buf),
-            Message::GetPictureNameTypeRequest(m) => m.encode(buf),
-            Message::GetPictureNameTypeResponse(m) => m.encode(buf),
-            Message::SetPictureNameTypeRequest(m) => m.encode(buf),
-            Message::SetPictureNameTypeResponse(m) => m.encode(buf),
-            Message::HdmiOsdStatusRequest(m) => m.encode(buf),
-            Message::HdmiOsdStatusResponse(m) => m.encode(buf),
-            Message::SetHdmiOsdStatusRequest(m) => m.encode(buf),
-            Message::SetHdmiOsdStatusResponse(m) => m.encode(buf),
-            Message::AiModeStatusRequest(m) => m.encode(buf),
-            Message::AiModeStatusResponse(m) => m.encode(buf),
-            Message::AiTrackingStreamStatusRequest(m) => m.encode(buf),
-            Message::AiTrackingStreamStatusResponse(m) => m.encode(buf),
-            Message::UpdateThermalShutterRequest(m) => m.encode(buf),
-            Message::UpdateThermalShutterResponse(m) => m.encode(buf),
-            Message::AiTrackingCoordinateStream(m) => m.encode(buf),
-            Message::SetAiTrackingStreamStatusRequest(m) => m.encode(buf),
-            Message::SetAiTrackingStreamStatusResponse(m) => m.encode(buf),
-            Message::WeakControlModeRequest(m) => m.encode(buf),
-            Message::WeakControlModeResponse(m) => m.encode(buf),
-            Message::SetWeakControlModeRequest(m) => m.encode(buf),
-            Message::SetWeakControlModeResponse(m) => m.encode(buf),
-            Message::SoftRebootRequest(m) => m.encode(buf),
-            Message::SoftRebootResponse(m) => m.encode(buf),
-            Message::GetIpAddressRequest(m) => m.encode(buf),
-            Message::GetIpAddressResponse(m) => m.encode(buf),
-            Message::SetIpAddressRequest(m) => m.encode(buf),
-            Message::SetIpAddressResponse(m) => m.encode(buf),
+            Self::TcpHeartbeat(m) => m.encode(buf),
+            Self::FirmwareVersionRequest(m) => m.encode(buf),
+            Self::FirmwareVersionResponse(m) => m.encode(buf),
+            Self::HardwareIdRequest(m) => m.encode(buf),
+            Self::HardwareIdResponse(m) => m.encode(buf),
+            Self::AutoFocusRequest(m) => m.encode(buf),
+            Self::AutoFocusResponse(m) => m.encode(buf),
+            Self::ManualZoomRequest(m) => m.encode(buf),
+            Self::ManualZoomResponse(m) => m.encode(buf),
+            Self::ManualFocusRequest(m) => m.encode(buf),
+            Self::ManualFocusResponse(m) => m.encode(buf),
+            Self::GimbalRotationRequest(m) => m.encode(buf),
+            Self::GimbalRotationResponse(m) => m.encode(buf),
+            Self::CenterGimbalRequest(m) => m.encode(buf),
+            Self::CenterGimbalResponse(m) => m.encode(buf),
+            Self::CameraSystemInfoRequest(m) => m.encode(buf),
+            Self::CameraSystemInfoResponse(m) => m.encode(buf),
+            Self::FunctionFeedback(m) => m.encode(buf),
+            Self::FunctionControl(m) => m.encode(buf),
+            Self::GimbalAttitudeRequest(m) => m.encode(buf),
+            Self::GimbalAttitudeResponse(m) => m.encode(buf),
+            Self::SetGimbalAttitudeRequest(m) => m.encode(buf),
+            Self::SetGimbalAttitudeResponse(m) => m.encode(buf),
+            Self::AbsoluteZoomRequest(m) => m.encode(buf),
+            Self::AbsoluteZoomResponse(m) => m.encode(buf),
+            Self::VideoStitchingModeRequest(m) => m.encode(buf),
+            Self::VideoStitchingModeResponse(m) => m.encode(buf),
+            Self::SetVideoStitchingModeRequest(m) => m.encode(buf),
+            Self::SetVideoStitchingModeResponse(m) => m.encode(buf),
+            Self::GetTemperatureAtPointRequest(m) => m.encode(buf),
+            Self::GetTemperatureAtPointResponse(m) => m.encode(buf),
+            Self::LocalTemperatureMeasurementRequest(m) => m.encode(buf),
+            Self::LocalTemperatureMeasurementResponse(m) => m.encode(buf),
+            Self::GlobalTemperatureMeasurementRequest(m) => m.encode(buf),
+            Self::GlobalTemperatureMeasurementResponse(m) => m.encode(buf),
+            Self::PseudoColorRequest(m) => m.encode(buf),
+            Self::PseudoColorResponse(m) => m.encode(buf),
+            Self::SetPseudoColorRequest(m) => m.encode(buf),
+            Self::SetPseudoColorResponse(m) => m.encode(buf),
+            Self::EncodingParamsRequest(m) => m.encode(buf),
+            Self::EncodingParamsResponse(m) => m.encode(buf),
+            Self::SetEncodingParamsRequest(m) => m.encode(buf),
+            Self::SetEncodingParamsResponse(m) => m.encode(buf),
+            Self::SendAircraftAttitude(m) => m.encode(buf),
+            Self::SendRcChannelDataRequest(m) => m.encode(buf),
+            Self::RequestFlightControllerDataStreamRequest(m) => m.encode(buf),
+            Self::RequestFlightControllerDataStreamResponse(m) => m.encode(buf),
+            Self::SetUtcTimeRequest(m) => m.encode(buf),
+            Self::SetUtcTimeResponse(m) => m.encode(buf),
+            Self::ThermalOutputModeRequest(m) => m.encode(buf),
+            Self::ThermalOutputModeResponse(m) => m.encode(buf),
+            Self::SetThermalOutputModeRequest(m) => m.encode(buf),
+            Self::SetThermalOutputModeResponse(m) => m.encode(buf),
+            Self::GetSingleTemperatureFrameRequest(m) => m.encode(buf),
+            Self::GetSingleTemperatureFrameResponse(m) => m.encode(buf),
+            Self::ThermalGainModeRequest(m) => m.encode(buf),
+            Self::ThermalGainModeResponse(m) => m.encode(buf),
+            Self::SetThermalGainModeRequest(m) => m.encode(buf),
+            Self::SetThermalGainModeResponse(m) => m.encode(buf),
+            Self::ThermalEnvCorrectionParamsRequest(m) => m.encode(buf),
+            Self::ThermalEnvCorrectionParamsResponse(m) => m.encode(buf),
+            Self::SetThermalEnvCorrectionParamsRequest(m) => m.encode(buf),
+            Self::SetThermalEnvCorrectionParamsResponse(m) => m.encode(buf),
+            Self::ThermalEnvCorrectionSwitchRequest(m) => m.encode(buf),
+            Self::ThermalEnvCorrectionSwitchResponse(m) => m.encode(buf),
+            Self::SetThermalEnvCorrectionSwitchRequest(m) => m.encode(buf),
+            Self::SetThermalEnvCorrectionSwitchResponse(m) => m.encode(buf),
+            Self::SendGpsData(m) => m.encode(buf),
+            Self::SystemTimeRequest(m) => m.encode(buf),
+            Self::SystemTimeResponse(m) => m.encode(buf),
+            Self::SingleAxisAttitudeRequest(m) => m.encode(buf),
+            Self::SingleAxisAttitudeResponse(m) => m.encode(buf),
+            Self::ThermalThresholdSwitchRequest(m) => m.encode(buf),
+            Self::ThermalThresholdSwitchResponse(m) => m.encode(buf),
+            Self::SetThermalThresholdSwitchRequest(m) => m.encode(buf),
+            Self::SetThermalThresholdSwitchResponse(m) => m.encode(buf),
+            Self::ThermalThresholdParamsRequest(m) => m.encode(buf),
+            Self::ThermalThresholdParamsResponse(m) => m.encode(buf),
+            Self::SetThermalThresholdParamsRequest(m) => m.encode(buf),
+            Self::SetThermalThresholdParamsResponse(m) => m.encode(buf),
+            Self::ThermalThresholdPrecisionRequest(m) => m.encode(buf),
+            Self::ThermalThresholdPrecisionResponse(m) => m.encode(buf),
+            Self::SetThermalThresholdPrecisionRequest(m) => m.encode(buf),
+            Self::SetThermalThresholdPrecisionResponse(m) => m.encode(buf),
+            Self::FormatSdCardRequest(m) => m.encode(buf),
+            Self::FormatSdCardResponse(m) => m.encode(buf),
+            Self::GetPictureNameTypeRequest(m) => m.encode(buf),
+            Self::GetPictureNameTypeResponse(m) => m.encode(buf),
+            Self::SetPictureNameTypeRequest(m) => m.encode(buf),
+            Self::SetPictureNameTypeResponse(m) => m.encode(buf),
+            Self::HdmiOsdStatusRequest(m) => m.encode(buf),
+            Self::HdmiOsdStatusResponse(m) => m.encode(buf),
+            Self::SetHdmiOsdStatusRequest(m) => m.encode(buf),
+            Self::SetHdmiOsdStatusResponse(m) => m.encode(buf),
+            Self::AiModeStatusRequest(m) => m.encode(buf),
+            Self::AiModeStatusResponse(m) => m.encode(buf),
+            Self::AiTrackingStreamStatusRequest(m) => m.encode(buf),
+            Self::AiTrackingStreamStatusResponse(m) => m.encode(buf),
+            Self::UpdateThermalShutterRequest(m) => m.encode(buf),
+            Self::UpdateThermalShutterResponse(m) => m.encode(buf),
+            Self::AiTrackingCoordinateStream(m) => m.encode(buf),
+            Self::SetAiTrackingStreamStatusRequest(m) => m.encode(buf),
+            Self::SetAiTrackingStreamStatusResponse(m) => m.encode(buf),
+            Self::SoftRebootRequest(m) => m.encode(buf),
+            Self::SoftRebootResponse(m) => m.encode(buf),
+            Self::GetIpAddressRequest(m) => m.encode(buf),
+            Self::GetIpAddressResponse(m) => m.encode(buf),
+            Self::SetIpAddressRequest(m) => m.encode(buf),
+            Self::SetIpAddressResponse(m) => m.encode(buf),
         }
     }
-    pub fn decode(frame: &Frame) -> Result<Self, DecodeError> {
-        let data = frame.data_slice();
+    pub fn from_frame(frame: &Frame) -> Result<Self, DecodeError> {
+        let data = &frame.data[..frame.data_len as usize];
         match frame.cmd {
-            0x00 => Ok(Message::TcpHeartbeat(TcpHeartbeat::decode(data)?)),
+            0x00 => Ok(Self::TcpHeartbeat(TcpHeartbeat::decode(data)?)),
             0x01 => {
-                if frame.ctrl.is_ack {
-                    Ok(Message::FirmwareVersionResponse(
+                if frame.ctrl.is_response() {
+                    Ok(Self::FirmwareVersionResponse(
                         FirmwareVersionResponse::decode(data)?,
                     ))
                 } else {
-                    Ok(Message::FirmwareVersionRequest(
+                    Ok(Self::FirmwareVersionRequest(
                         FirmwareVersionRequest::decode(data)?,
                     ))
                 }
             }
             0x02 => {
-                if frame.ctrl.is_ack {
-                    Ok(Message::HardwareIdResponse(HardwareIdResponse::decode(
-                        data,
-                    )?))
+                if frame.ctrl.is_response() {
+                    Ok(Self::HardwareIdResponse(HardwareIdResponse::decode(data)?))
                 } else {
-                    Ok(Message::HardwareIdRequest(HardwareIdRequest::decode(data)?))
+                    Ok(Self::HardwareIdRequest(HardwareIdRequest::decode(data)?))
                 }
             }
             0x04 => {
-                if frame.ctrl.is_ack {
-                    Ok(Message::AutoFocusResponse(AutoFocusResponse::decode(data)?))
+                if frame.ctrl.is_response() {
+                    Ok(Self::AutoFocusResponse(AutoFocusResponse::decode(data)?))
                 } else {
-                    Ok(Message::AutoFocusRequest(AutoFocusRequest::decode(data)?))
+                    Ok(Self::AutoFocusRequest(AutoFocusRequest::decode(data)?))
                 }
             }
             0x05 => {
-                if frame.ctrl.is_ack {
-                    Ok(Message::ManualZoomResponse(ManualZoomResponse::decode(
-                        data,
-                    )?))
+                if frame.ctrl.is_response() {
+                    Ok(Self::ManualZoomResponse(ManualZoomResponse::decode(data)?))
                 } else {
-                    Ok(Message::ManualZoomRequest(ManualZoomRequest::decode(data)?))
+                    Ok(Self::ManualZoomRequest(ManualZoomRequest::decode(data)?))
                 }
             }
             0x06 => {
-                if frame.ctrl.is_ack {
-                    Ok(Message::ManualFocusResponse(ManualFocusResponse::decode(
+                if frame.ctrl.is_response() {
+                    Ok(Self::ManualFocusResponse(ManualFocusResponse::decode(
                         data,
                     )?))
                 } else {
-                    Ok(Message::ManualFocusRequest(ManualFocusRequest::decode(
-                        data,
-                    )?))
+                    Ok(Self::ManualFocusRequest(ManualFocusRequest::decode(data)?))
                 }
             }
             0x07 => {
-                if frame.ctrl.is_ack {
-                    Ok(Message::GimbalRotationResponse(
+                if frame.ctrl.is_response() {
+                    Ok(Self::GimbalRotationResponse(
                         GimbalRotationResponse::decode(data)?,
                     ))
                 } else {
-                    Ok(Message::GimbalRotationRequest(
-                        GimbalRotationRequest::decode(data)?,
-                    ))
+                    Ok(Self::GimbalRotationRequest(GimbalRotationRequest::decode(
+                        data,
+                    )?))
                 }
             }
             0x08 => {
-                if frame.ctrl.is_ack {
-                    Ok(Message::CenterGimbalResponse(CenterGimbalResponse::decode(
+                if frame.ctrl.is_response() {
+                    Ok(Self::CenterGimbalResponse(CenterGimbalResponse::decode(
                         data,
                     )?))
                 } else {
-                    Ok(Message::CenterGimbalRequest(CenterGimbalRequest::decode(
+                    Ok(Self::CenterGimbalRequest(CenterGimbalRequest::decode(
                         data,
                     )?))
                 }
             }
             0x0A => {
-                if frame.ctrl.is_ack {
-                    Ok(Message::CameraSystemInfoResponse(
+                if frame.ctrl.is_response() {
+                    Ok(Self::CameraSystemInfoResponse(
                         CameraSystemInfoResponse::decode(data)?,
                     ))
                 } else {
-                    Ok(Message::CameraSystemInfoRequest(
+                    Ok(Self::CameraSystemInfoRequest(
                         CameraSystemInfoRequest::decode(data)?,
                     ))
                 }
             }
-            0x0B => Ok(Message::FunctionFeedback(FunctionFeedback::decode(data)?)),
-            0x0C => Ok(Message::FunctionControl(FunctionControl::decode(data)?)),
+            0x0B => Ok(Self::FunctionFeedback(FunctionFeedback::decode(data)?)),
+            0x0C => Ok(Self::FunctionControl(FunctionControl::decode(data)?)),
             0x0D => {
-                if frame.ctrl.is_ack {
-                    Ok(Message::GimbalAttitudeResponse(
+                if frame.ctrl.is_response() {
+                    Ok(Self::GimbalAttitudeResponse(
                         GimbalAttitudeResponse::decode(data)?,
                     ))
                 } else {
-                    Ok(Message::GimbalAttitudeRequest(
-                        GimbalAttitudeRequest::decode(data)?,
-                    ))
+                    Ok(Self::GimbalAttitudeRequest(GimbalAttitudeRequest::decode(
+                        data,
+                    )?))
                 }
             }
             0x0E => {
-                if frame.ctrl.is_ack {
-                    Ok(Message::SetGimbalAttitudeResponse(
+                if frame.ctrl.is_response() {
+                    Ok(Self::SetGimbalAttitudeResponse(
                         SetGimbalAttitudeResponse::decode(data)?,
                     ))
                 } else {
-                    Ok(Message::SetGimbalAttitudeRequest(
+                    Ok(Self::SetGimbalAttitudeRequest(
                         SetGimbalAttitudeRequest::decode(data)?,
                     ))
                 }
             }
             0x0F => {
-                if frame.ctrl.is_ack {
-                    Ok(Message::AbsoluteZoomResponse(AbsoluteZoomResponse::decode(
+                if frame.ctrl.is_response() {
+                    Ok(Self::AbsoluteZoomResponse(AbsoluteZoomResponse::decode(
                         data,
                     )?))
                 } else {
-                    Ok(Message::AbsoluteZoomRequest(AbsoluteZoomRequest::decode(
+                    Ok(Self::AbsoluteZoomRequest(AbsoluteZoomRequest::decode(
                         data,
                     )?))
                 }
             }
             0x10 => {
-                if frame.ctrl.is_ack {
-                    Ok(Message::VideoStitchingModeResponse(
+                if frame.ctrl.is_response() {
+                    Ok(Self::VideoStitchingModeResponse(
                         VideoStitchingModeResponse::decode(data)?,
                     ))
                 } else {
-                    Ok(Message::VideoStitchingModeRequest(
+                    Ok(Self::VideoStitchingModeRequest(
                         VideoStitchingModeRequest::decode(data)?,
                     ))
                 }
             }
             0x11 => {
-                if frame.ctrl.is_ack {
-                    Ok(Message::SetVideoStitchingModeResponse(
+                if frame.ctrl.is_response() {
+                    Ok(Self::SetVideoStitchingModeResponse(
                         SetVideoStitchingModeResponse::decode(data)?,
                     ))
                 } else {
-                    Ok(Message::SetVideoStitchingModeRequest(
+                    Ok(Self::SetVideoStitchingModeRequest(
                         SetVideoStitchingModeRequest::decode(data)?,
                     ))
                 }
             }
             0x12 => {
-                if frame.ctrl.is_ack {
-                    Ok(Message::GetTemperatureAtPointResponse(
+                if frame.ctrl.is_response() {
+                    Ok(Self::GetTemperatureAtPointResponse(
                         GetTemperatureAtPointResponse::decode(data)?,
                     ))
                 } else {
-                    Ok(Message::GetTemperatureAtPointRequest(
+                    Ok(Self::GetTemperatureAtPointRequest(
                         GetTemperatureAtPointRequest::decode(data)?,
                     ))
                 }
             }
             0x13 => {
-                if frame.ctrl.is_ack {
-                    Ok(Message::LocalTemperatureMeasurementResponse(
+                if frame.ctrl.is_response() {
+                    Ok(Self::LocalTemperatureMeasurementResponse(
                         LocalTemperatureMeasurementResponse::decode(data)?,
                     ))
                 } else {
-                    Ok(Message::LocalTemperatureMeasurementRequest(
+                    Ok(Self::LocalTemperatureMeasurementRequest(
                         LocalTemperatureMeasurementRequest::decode(data)?,
                     ))
                 }
             }
             0x14 => {
-                if frame.ctrl.is_ack {
-                    Ok(Message::GlobalTemperatureMeasurementResponse(
+                if frame.ctrl.is_response() {
+                    Ok(Self::GlobalTemperatureMeasurementResponse(
                         GlobalTemperatureMeasurementResponse::decode(data)?,
                     ))
                 } else {
-                    Ok(Message::GlobalTemperatureMeasurementRequest(
+                    Ok(Self::GlobalTemperatureMeasurementRequest(
                         GlobalTemperatureMeasurementRequest::decode(data)?,
                     ))
                 }
             }
-            0x15 => {
-                if frame.ctrl.is_ack {
-                    Ok(Message::LaserDistanceResponse(
-                        LaserDistanceResponse::decode(data)?,
-                    ))
-                } else {
-                    Ok(Message::LaserDistanceRequest(LaserDistanceRequest::decode(
-                        data,
-                    )?))
-                }
-            }
-            0x16 => {
-                if frame.ctrl.is_ack {
-                    Ok(Message::MaxZoomRangeResponse(MaxZoomRangeResponse::decode(
-                        data,
-                    )?))
-                } else {
-                    Ok(Message::MaxZoomRangeRequest(MaxZoomRangeRequest::decode(
-                        data,
-                    )?))
-                }
-            }
-            0x17 => {
-                if frame.ctrl.is_ack {
-                    Ok(Message::LaserTargetLocationResponse(
-                        LaserTargetLocationResponse::decode(data)?,
-                    ))
-                } else {
-                    Ok(Message::LaserTargetLocationRequest(
-                        LaserTargetLocationRequest::decode(data)?,
-                    ))
-                }
-            }
-            0x18 => {
-                if frame.ctrl.is_ack {
-                    Ok(Message::CurrentZoomResponse(CurrentZoomResponse::decode(
-                        data,
-                    )?))
-                } else {
-                    Ok(Message::CurrentZoomRequest(CurrentZoomRequest::decode(
-                        data,
-                    )?))
-                }
-            }
-            0x19 => {
-                if frame.ctrl.is_ack {
-                    Ok(Message::GimbalModeResponse(GimbalModeResponse::decode(
-                        data,
-                    )?))
-                } else {
-                    Ok(Message::GimbalModeRequest(GimbalModeRequest::decode(data)?))
-                }
-            }
             0x1A => {
-                if frame.ctrl.is_ack {
-                    Ok(Message::PseudoColorResponse(PseudoColorResponse::decode(
+                if frame.ctrl.is_response() {
+                    Ok(Self::PseudoColorResponse(PseudoColorResponse::decode(
                         data,
                     )?))
                 } else {
-                    Ok(Message::PseudoColorRequest(PseudoColorRequest::decode(
-                        data,
-                    )?))
+                    Ok(Self::PseudoColorRequest(PseudoColorRequest::decode(data)?))
                 }
             }
             0x1B => {
-                if frame.ctrl.is_ack {
-                    Ok(Message::SetPseudoColorResponse(
+                if frame.ctrl.is_response() {
+                    Ok(Self::SetPseudoColorResponse(
                         SetPseudoColorResponse::decode(data)?,
                     ))
                 } else {
-                    Ok(Message::SetPseudoColorRequest(
-                        SetPseudoColorRequest::decode(data)?,
-                    ))
+                    Ok(Self::SetPseudoColorRequest(SetPseudoColorRequest::decode(
+                        data,
+                    )?))
                 }
             }
             0x20 => {
-                if frame.ctrl.is_ack {
-                    Ok(Message::EncodingParamsResponse(
+                if frame.ctrl.is_response() {
+                    Ok(Self::EncodingParamsResponse(
                         EncodingParamsResponse::decode(data)?,
                     ))
                 } else {
-                    Ok(Message::EncodingParamsRequest(
-                        EncodingParamsRequest::decode(data)?,
-                    ))
+                    Ok(Self::EncodingParamsRequest(EncodingParamsRequest::decode(
+                        data,
+                    )?))
                 }
             }
             0x21 => {
-                if frame.ctrl.is_ack {
-                    Ok(Message::SetEncodingParamsResponse(
+                if frame.ctrl.is_response() {
+                    Ok(Self::SetEncodingParamsResponse(
                         SetEncodingParamsResponse::decode(data)?,
                     ))
                 } else {
-                    Ok(Message::SetEncodingParamsRequest(
+                    Ok(Self::SetEncodingParamsRequest(
                         SetEncodingParamsRequest::decode(data)?,
                     ))
                 }
             }
-            0x22 => Ok(Message::SendAircraftAttitude(SendAircraftAttitude::decode(
+            0x22 => Ok(Self::SendAircraftAttitude(SendAircraftAttitude::decode(
                 data,
             )?)),
-            0x23 => Ok(Message::SendRcChannelDataRequest(
+            0x23 => Ok(Self::SendRcChannelDataRequest(
                 SendRcChannelDataRequest::decode(data)?,
             )),
             0x24 => {
-                if frame.ctrl.is_ack {
-                    Ok(Message::RequestFlightControllerDataStreamResponse(
+                if frame.ctrl.is_response() {
+                    Ok(Self::RequestFlightControllerDataStreamResponse(
                         RequestFlightControllerDataStreamResponse::decode(data)?,
                     ))
                 } else {
-                    Ok(Message::RequestFlightControllerDataStreamRequest(
+                    Ok(Self::RequestFlightControllerDataStreamRequest(
                         RequestFlightControllerDataStreamRequest::decode(data)?,
                     ))
                 }
             }
-            0x25 => {
-                if frame.ctrl.is_ack {
-                    Ok(Message::RequestDataStreamResponse(
-                        RequestDataStreamResponse::decode(data)?,
-                    ))
-                } else {
-                    Ok(Message::RequestDataStreamRequest(
-                        RequestDataStreamRequest::decode(data)?,
-                    ))
-                }
-            }
-            0x26 => {
-                if frame.ctrl.is_ack {
-                    Ok(Message::MagneticEncoderAngleResponse(
-                        MagneticEncoderAngleResponse::decode(data)?,
-                    ))
-                } else {
-                    Ok(Message::MagneticEncoderAngleRequest(
-                        MagneticEncoderAngleRequest::decode(data)?,
-                    ))
-                }
-            }
-            0x27 => {
-                if frame.ctrl.is_ack {
-                    Ok(Message::GimbalControlModeResponse(
-                        GimbalControlModeResponse::decode(data)?,
-                    ))
-                } else {
-                    Ok(Message::GimbalControlModeRequest(
-                        GimbalControlModeRequest::decode(data)?,
-                    ))
-                }
-            }
-            0x28 => {
-                if frame.ctrl.is_ack {
-                    Ok(Message::WeakControlThresholdResponse(
-                        WeakControlThresholdResponse::decode(data)?,
-                    ))
-                } else {
-                    Ok(Message::WeakControlThresholdRequest(
-                        WeakControlThresholdRequest::decode(data)?,
-                    ))
-                }
-            }
-            0x29 => {
-                if frame.ctrl.is_ack {
-                    Ok(Message::SetWeakControlThresholdResponse(
-                        SetWeakControlThresholdResponse::decode(data)?,
-                    ))
-                } else {
-                    Ok(Message::SetWeakControlThresholdRequest(
-                        SetWeakControlThresholdRequest::decode(data)?,
-                    ))
-                }
-            }
-            0x2A => {
-                if frame.ctrl.is_ack {
-                    Ok(Message::MotorVoltageResponse(MotorVoltageResponse::decode(
-                        data,
-                    )?))
-                } else {
-                    Ok(Message::MotorVoltageRequest(MotorVoltageRequest::decode(
-                        data,
-                    )?))
-                }
-            }
             0x30 => {
-                if frame.ctrl.is_ack {
-                    Ok(Message::SetUtcTimeResponse(SetUtcTimeResponse::decode(
-                        data,
-                    )?))
+                if frame.ctrl.is_response() {
+                    Ok(Self::SetUtcTimeResponse(SetUtcTimeResponse::decode(data)?))
                 } else {
-                    Ok(Message::SetUtcTimeRequest(SetUtcTimeRequest::decode(data)?))
-                }
-            }
-            0x31 => {
-                if frame.ctrl.is_ack {
-                    Ok(Message::GimbalSystemInfoResponse(
-                        GimbalSystemInfoResponse::decode(data)?,
-                    ))
-                } else {
-                    Ok(Message::GimbalSystemInfoRequest(
-                        GimbalSystemInfoRequest::decode(data)?,
-                    ))
-                }
-            }
-            0x32 => {
-                if frame.ctrl.is_ack {
-                    Ok(Message::SetLaserStateResponse(
-                        SetLaserStateResponse::decode(data)?,
-                    ))
-                } else {
-                    Ok(Message::SetLaserStateRequest(SetLaserStateRequest::decode(
-                        data,
-                    )?))
+                    Ok(Self::SetUtcTimeRequest(SetUtcTimeRequest::decode(data)?))
                 }
             }
             0x33 => {
-                if frame.ctrl.is_ack {
-                    Ok(Message::ThermalOutputModeResponse(
+                if frame.ctrl.is_response() {
+                    Ok(Self::ThermalOutputModeResponse(
                         ThermalOutputModeResponse::decode(data)?,
                     ))
                 } else {
-                    Ok(Message::ThermalOutputModeRequest(
+                    Ok(Self::ThermalOutputModeRequest(
                         ThermalOutputModeRequest::decode(data)?,
                     ))
                 }
             }
             0x34 => {
-                if frame.ctrl.is_ack {
-                    Ok(Message::SetThermalOutputModeResponse(
+                if frame.ctrl.is_response() {
+                    Ok(Self::SetThermalOutputModeResponse(
                         SetThermalOutputModeResponse::decode(data)?,
                     ))
                 } else {
-                    Ok(Message::SetThermalOutputModeRequest(
+                    Ok(Self::SetThermalOutputModeRequest(
                         SetThermalOutputModeRequest::decode(data)?,
                     ))
                 }
             }
             0x35 => {
-                if frame.ctrl.is_ack {
-                    Ok(Message::GetSingleTemperatureFrameResponse(
+                if frame.ctrl.is_response() {
+                    Ok(Self::GetSingleTemperatureFrameResponse(
                         GetSingleTemperatureFrameResponse::decode(data)?,
                     ))
                 } else {
-                    Ok(Message::GetSingleTemperatureFrameRequest(
+                    Ok(Self::GetSingleTemperatureFrameRequest(
                         GetSingleTemperatureFrameRequest::decode(data)?,
                     ))
                 }
             }
             0x37 => {
-                if frame.ctrl.is_ack {
-                    Ok(Message::ThermalGainModeResponse(
+                if frame.ctrl.is_response() {
+                    Ok(Self::ThermalGainModeResponse(
                         ThermalGainModeResponse::decode(data)?,
                     ))
                 } else {
-                    Ok(Message::ThermalGainModeRequest(
+                    Ok(Self::ThermalGainModeRequest(
                         ThermalGainModeRequest::decode(data)?,
                     ))
                 }
             }
             0x38 => {
-                if frame.ctrl.is_ack {
-                    Ok(Message::SetThermalGainModeResponse(
+                if frame.ctrl.is_response() {
+                    Ok(Self::SetThermalGainModeResponse(
                         SetThermalGainModeResponse::decode(data)?,
                     ))
                 } else {
-                    Ok(Message::SetThermalGainModeRequest(
+                    Ok(Self::SetThermalGainModeRequest(
                         SetThermalGainModeRequest::decode(data)?,
                     ))
                 }
             }
             0x39 => {
-                if frame.ctrl.is_ack {
-                    Ok(Message::ThermalEnvCorrectionParamsResponse(
+                if frame.ctrl.is_response() {
+                    Ok(Self::ThermalEnvCorrectionParamsResponse(
                         ThermalEnvCorrectionParamsResponse::decode(data)?,
                     ))
                 } else {
-                    Ok(Message::ThermalEnvCorrectionParamsRequest(
+                    Ok(Self::ThermalEnvCorrectionParamsRequest(
                         ThermalEnvCorrectionParamsRequest::decode(data)?,
                     ))
                 }
             }
             0x3A => {
-                if frame.ctrl.is_ack {
-                    Ok(Message::SetThermalEnvCorrectionParamsResponse(
+                if frame.ctrl.is_response() {
+                    Ok(Self::SetThermalEnvCorrectionParamsResponse(
                         SetThermalEnvCorrectionParamsResponse::decode(data)?,
                     ))
                 } else {
-                    Ok(Message::SetThermalEnvCorrectionParamsRequest(
+                    Ok(Self::SetThermalEnvCorrectionParamsRequest(
                         SetThermalEnvCorrectionParamsRequest::decode(data)?,
                     ))
                 }
             }
             0x3B => {
-                if frame.ctrl.is_ack {
-                    Ok(Message::ThermalEnvCorrectionSwitchResponse(
+                if frame.ctrl.is_response() {
+                    Ok(Self::ThermalEnvCorrectionSwitchResponse(
                         ThermalEnvCorrectionSwitchResponse::decode(data)?,
                     ))
                 } else {
-                    Ok(Message::ThermalEnvCorrectionSwitchRequest(
+                    Ok(Self::ThermalEnvCorrectionSwitchRequest(
                         ThermalEnvCorrectionSwitchRequest::decode(data)?,
                     ))
                 }
             }
             0x3C => {
-                if frame.ctrl.is_ack {
-                    Ok(Message::SetThermalEnvCorrectionSwitchResponse(
+                if frame.ctrl.is_response() {
+                    Ok(Self::SetThermalEnvCorrectionSwitchResponse(
                         SetThermalEnvCorrectionSwitchResponse::decode(data)?,
                     ))
                 } else {
-                    Ok(Message::SetThermalEnvCorrectionSwitchRequest(
+                    Ok(Self::SetThermalEnvCorrectionSwitchRequest(
                         SetThermalEnvCorrectionSwitchRequest::decode(data)?,
                     ))
                 }
             }
-            0x3E => Ok(Message::SendGpsData(SendGpsData::decode(data)?)),
+            0x3E => Ok(Self::SendGpsData(SendGpsData::decode(data)?)),
             0x40 => {
-                if frame.ctrl.is_ack {
-                    Ok(Message::SystemTimeResponse(SystemTimeResponse::decode(
-                        data,
-                    )?))
+                if frame.ctrl.is_response() {
+                    Ok(Self::SystemTimeResponse(SystemTimeResponse::decode(data)?))
                 } else {
-                    Ok(Message::SystemTimeRequest(SystemTimeRequest::decode(data)?))
+                    Ok(Self::SystemTimeRequest(SystemTimeRequest::decode(data)?))
                 }
             }
             0x41 => {
-                if frame.ctrl.is_ack {
-                    Ok(Message::SingleAxisAttitudeResponse(
+                if frame.ctrl.is_response() {
+                    Ok(Self::SingleAxisAttitudeResponse(
                         SingleAxisAttitudeResponse::decode(data)?,
                     ))
                 } else {
-                    Ok(Message::SingleAxisAttitudeRequest(
+                    Ok(Self::SingleAxisAttitudeRequest(
                         SingleAxisAttitudeRequest::decode(data)?,
                     ))
                 }
             }
             0x42 => {
-                if frame.ctrl.is_ack {
-                    Ok(Message::ThermalThresholdSwitchResponse(
+                if frame.ctrl.is_response() {
+                    Ok(Self::ThermalThresholdSwitchResponse(
                         ThermalThresholdSwitchResponse::decode(data)?,
                     ))
                 } else {
-                    Ok(Message::ThermalThresholdSwitchRequest(
+                    Ok(Self::ThermalThresholdSwitchRequest(
                         ThermalThresholdSwitchRequest::decode(data)?,
                     ))
                 }
             }
             0x43 => {
-                if frame.ctrl.is_ack {
-                    Ok(Message::SetThermalThresholdSwitchResponse(
+                if frame.ctrl.is_response() {
+                    Ok(Self::SetThermalThresholdSwitchResponse(
                         SetThermalThresholdSwitchResponse::decode(data)?,
                     ))
                 } else {
-                    Ok(Message::SetThermalThresholdSwitchRequest(
+                    Ok(Self::SetThermalThresholdSwitchRequest(
                         SetThermalThresholdSwitchRequest::decode(data)?,
                     ))
                 }
             }
             0x44 => {
-                if frame.ctrl.is_ack {
-                    Ok(Message::ThermalThresholdParamsResponse(
+                if frame.ctrl.is_response() {
+                    Ok(Self::ThermalThresholdParamsResponse(
                         ThermalThresholdParamsResponse::decode(data)?,
                     ))
                 } else {
-                    Ok(Message::ThermalThresholdParamsRequest(
+                    Ok(Self::ThermalThresholdParamsRequest(
                         ThermalThresholdParamsRequest::decode(data)?,
                     ))
                 }
             }
             0x45 => {
-                if frame.ctrl.is_ack {
-                    Ok(Message::SetThermalThresholdParamsResponse(
+                if frame.ctrl.is_response() {
+                    Ok(Self::SetThermalThresholdParamsResponse(
                         SetThermalThresholdParamsResponse::decode(data)?,
                     ))
                 } else {
-                    Ok(Message::SetThermalThresholdParamsRequest(
+                    Ok(Self::SetThermalThresholdParamsRequest(
                         SetThermalThresholdParamsRequest::decode(data)?,
                     ))
                 }
             }
             0x46 => {
-                if frame.ctrl.is_ack {
-                    Ok(Message::ThermalThresholdPrecisionResponse(
+                if frame.ctrl.is_response() {
+                    Ok(Self::ThermalThresholdPrecisionResponse(
                         ThermalThresholdPrecisionResponse::decode(data)?,
                     ))
                 } else {
-                    Ok(Message::ThermalThresholdPrecisionRequest(
+                    Ok(Self::ThermalThresholdPrecisionRequest(
                         ThermalThresholdPrecisionRequest::decode(data)?,
                     ))
                 }
             }
             0x47 => {
-                if frame.ctrl.is_ack {
-                    Ok(Message::SetThermalThresholdPrecisionResponse(
+                if frame.ctrl.is_response() {
+                    Ok(Self::SetThermalThresholdPrecisionResponse(
                         SetThermalThresholdPrecisionResponse::decode(data)?,
                     ))
                 } else {
-                    Ok(Message::SetThermalThresholdPrecisionRequest(
+                    Ok(Self::SetThermalThresholdPrecisionRequest(
                         SetThermalThresholdPrecisionRequest::decode(data)?,
                     ))
                 }
             }
             0x48 => {
-                if frame.ctrl.is_ack {
-                    Ok(Message::FormatSdCardResponse(FormatSdCardResponse::decode(
+                if frame.ctrl.is_response() {
+                    Ok(Self::FormatSdCardResponse(FormatSdCardResponse::decode(
                         data,
                     )?))
                 } else {
-                    Ok(Message::FormatSdCardRequest(FormatSdCardRequest::decode(
+                    Ok(Self::FormatSdCardRequest(FormatSdCardRequest::decode(
                         data,
                     )?))
                 }
             }
             0x49 => {
-                if frame.ctrl.is_ack {
-                    Ok(Message::GetPictureNameTypeResponse(
+                if frame.ctrl.is_response() {
+                    Ok(Self::GetPictureNameTypeResponse(
                         GetPictureNameTypeResponse::decode(data)?,
                     ))
                 } else {
-                    Ok(Message::GetPictureNameTypeRequest(
+                    Ok(Self::GetPictureNameTypeRequest(
                         GetPictureNameTypeRequest::decode(data)?,
                     ))
                 }
             }
             0x4A => {
-                if frame.ctrl.is_ack {
-                    Ok(Message::SetPictureNameTypeResponse(
+                if frame.ctrl.is_response() {
+                    Ok(Self::SetPictureNameTypeResponse(
                         SetPictureNameTypeResponse::decode(data)?,
                     ))
                 } else {
-                    Ok(Message::SetPictureNameTypeRequest(
+                    Ok(Self::SetPictureNameTypeRequest(
                         SetPictureNameTypeRequest::decode(data)?,
                     ))
                 }
             }
             0x4B => {
-                if frame.ctrl.is_ack {
-                    Ok(Message::HdmiOsdStatusResponse(
-                        HdmiOsdStatusResponse::decode(data)?,
-                    ))
+                if frame.ctrl.is_response() {
+                    Ok(Self::HdmiOsdStatusResponse(HdmiOsdStatusResponse::decode(
+                        data,
+                    )?))
                 } else {
-                    Ok(Message::HdmiOsdStatusRequest(HdmiOsdStatusRequest::decode(
+                    Ok(Self::HdmiOsdStatusRequest(HdmiOsdStatusRequest::decode(
                         data,
                     )?))
                 }
             }
             0x4C => {
-                if frame.ctrl.is_ack {
-                    Ok(Message::SetHdmiOsdStatusResponse(
+                if frame.ctrl.is_response() {
+                    Ok(Self::SetHdmiOsdStatusResponse(
                         SetHdmiOsdStatusResponse::decode(data)?,
                     ))
                 } else {
-                    Ok(Message::SetHdmiOsdStatusRequest(
+                    Ok(Self::SetHdmiOsdStatusRequest(
                         SetHdmiOsdStatusRequest::decode(data)?,
                     ))
                 }
             }
             0x4D => {
-                if frame.ctrl.is_ack {
-                    Ok(Message::AiModeStatusResponse(AiModeStatusResponse::decode(
+                if frame.ctrl.is_response() {
+                    Ok(Self::AiModeStatusResponse(AiModeStatusResponse::decode(
                         data,
                     )?))
                 } else {
-                    Ok(Message::AiModeStatusRequest(AiModeStatusRequest::decode(
+                    Ok(Self::AiModeStatusRequest(AiModeStatusRequest::decode(
                         data,
                     )?))
                 }
             }
             0x4E => {
-                if frame.ctrl.is_ack {
-                    Ok(Message::AiTrackingStreamStatusResponse(
+                if frame.ctrl.is_response() {
+                    Ok(Self::AiTrackingStreamStatusResponse(
                         AiTrackingStreamStatusResponse::decode(data)?,
                     ))
                 } else {
-                    Ok(Message::AiTrackingStreamStatusRequest(
+                    Ok(Self::AiTrackingStreamStatusRequest(
                         AiTrackingStreamStatusRequest::decode(data)?,
                     ))
                 }
             }
             0x4F => {
-                if frame.ctrl.is_ack {
-                    Ok(Message::UpdateThermalShutterResponse(
+                if frame.ctrl.is_response() {
+                    Ok(Self::UpdateThermalShutterResponse(
                         UpdateThermalShutterResponse::decode(data)?,
                     ))
                 } else {
-                    Ok(Message::UpdateThermalShutterRequest(
+                    Ok(Self::UpdateThermalShutterRequest(
                         UpdateThermalShutterRequest::decode(data)?,
                     ))
                 }
             }
-            0x50 => Ok(Message::AiTrackingCoordinateStream(
+            0x50 => Ok(Self::AiTrackingCoordinateStream(
                 AiTrackingCoordinateStream::decode(data)?,
             )),
             0x51 => {
-                if frame.ctrl.is_ack {
-                    Ok(Message::SetAiTrackingStreamStatusResponse(
+                if frame.ctrl.is_response() {
+                    Ok(Self::SetAiTrackingStreamStatusResponse(
                         SetAiTrackingStreamStatusResponse::decode(data)?,
                     ))
                 } else {
-                    Ok(Message::SetAiTrackingStreamStatusRequest(
+                    Ok(Self::SetAiTrackingStreamStatusRequest(
                         SetAiTrackingStreamStatusRequest::decode(data)?,
                     ))
                 }
             }
-            0x70 => {
-                if frame.ctrl.is_ack {
-                    Ok(Message::WeakControlModeResponse(
-                        WeakControlModeResponse::decode(data)?,
-                    ))
-                } else {
-                    Ok(Message::WeakControlModeRequest(
-                        WeakControlModeRequest::decode(data)?,
-                    ))
-                }
-            }
-            0x71 => {
-                if frame.ctrl.is_ack {
-                    Ok(Message::SetWeakControlModeResponse(
-                        SetWeakControlModeResponse::decode(data)?,
-                    ))
-                } else {
-                    Ok(Message::SetWeakControlModeRequest(
-                        SetWeakControlModeRequest::decode(data)?,
-                    ))
-                }
-            }
             0x80 => {
-                if frame.ctrl.is_ack {
-                    Ok(Message::SoftRebootResponse(SoftRebootResponse::decode(
-                        data,
-                    )?))
+                if frame.ctrl.is_response() {
+                    Ok(Self::SoftRebootResponse(SoftRebootResponse::decode(data)?))
                 } else {
-                    Ok(Message::SoftRebootRequest(SoftRebootRequest::decode(data)?))
+                    Ok(Self::SoftRebootRequest(SoftRebootRequest::decode(data)?))
                 }
             }
             0x81 => {
-                if frame.ctrl.is_ack {
-                    Ok(Message::GetIpAddressResponse(GetIpAddressResponse::decode(
+                if frame.ctrl.is_response() {
+                    Ok(Self::GetIpAddressResponse(GetIpAddressResponse::decode(
                         data,
                     )?))
                 } else {
-                    Ok(Message::GetIpAddressRequest(GetIpAddressRequest::decode(
+                    Ok(Self::GetIpAddressRequest(GetIpAddressRequest::decode(
                         data,
                     )?))
                 }
             }
             0x82 => {
-                if frame.ctrl.is_ack {
-                    Ok(Message::SetIpAddressResponse(SetIpAddressResponse::decode(
+                if frame.ctrl.is_response() {
+                    Ok(Self::SetIpAddressResponse(SetIpAddressResponse::decode(
                         data,
                     )?))
                 } else {
-                    Ok(Message::SetIpAddressRequest(SetIpAddressRequest::decode(
+                    Ok(Self::SetIpAddressRequest(SetIpAddressRequest::decode(
                         data,
                     )?))
                 }
@@ -10727,98 +7763,393 @@ impl Message {
         }
     }
 }
-
-// ============================================================================
-// Helper Functions
-// ============================================================================
-
-/// Convert Frame to bytes (serialize)
-pub fn frame_to_bytes(frame: &Frame, buf: &mut [u8]) -> Result<usize, EncodeError> {
-    let data_len = frame.data_len as usize;
-    let total = 10 + data_len;
-    if buf.len() < total {
-        return Err(EncodeError::BufferTooSmall);
-    }
-    buf[0..2].copy_from_slice(&STX.to_le_bytes());
-    buf[2] = frame.ctrl.to_u8();
-    buf[3..5].copy_from_slice(&frame.data_len.to_le_bytes());
-    buf[5..7].copy_from_slice(&frame.seq.to_le_bytes());
-    buf[7] = frame.cmd;
-    buf[8..8 + data_len].copy_from_slice(&frame.data[..data_len]);
-    let crc = crc16_calc(&buf[..8 + data_len]);
-    buf[8 + data_len..8 + data_len + 2].copy_from_slice(&crc.to_le_bytes());
-    Ok(total)
+pub fn encode_message(msg: &Message, frame_buf: &mut [u8]) -> Result<usize, EncodeError> {
+    let mut data_buf = [0u8; MAX_MESSAGE_SIZE];
+    let data_len = msg.encode(&mut data_buf)?;
+    let mut frame = Frame {
+        ctrl: if msg.is_response() {
+            CtrlByte::response()
+        } else {
+            CtrlByte::request()
+        },
+        seq: 0,
+        cmd: msg.cmd_id(),
+        data: [0u8; MAX_MESSAGE_SIZE],
+        data_len: data_len as u16,
+    };
+    frame.data[..data_len].copy_from_slice(&data_buf[..data_len]);
+    frame.encode(frame_buf)
 }
-
-/// Convert bytes to Frame (deserialize) - for complete packets
-pub fn bytes_to_frame(data: &[u8]) -> Result<Frame, DecodeError> {
-    if data.len() < 10 {
-        return Err(DecodeError::FrameIncomplete);
-    }
-    let stx = u16::from_le_bytes([data[0], data[1]]);
-    if stx != STX {
-        return Err(DecodeError::InvalidStx);
-    }
-    let data_len = u16::from_le_bytes([data[3], data[4]]) as usize;
-    let total = 10 + data_len;
-    if data.len() < total {
-        return Err(DecodeError::FrameIncomplete);
-    }
-    let crc_recv = u16::from_le_bytes([data[8 + data_len], data[8 + data_len + 1]]);
-    let crc_calc = crc16_calc(&data[..8 + data_len]);
-    if crc_recv != crc_calc {
-        return Err(DecodeError::CrcMismatch);
-    }
-    let mut frame = Frame::default();
-    frame.ctrl = CtrlByte::from_u8(data[2]);
-    frame.seq = u16::from_le_bytes([data[5], data[6]]);
-    frame.cmd = data[7];
-    frame.data_len = data_len as u16;
-    frame.data[..data_len].copy_from_slice(&data[8..8 + data_len]);
-    Ok(frame)
+pub fn decode_message(buf: &[u8]) -> Result<Message, DecodeError> {
+    let frame = Frame::decode(buf)?;
+    Message::from_frame(&frame)
 }
-
-/// Convert Message to bytes (full frame serialization)
-pub fn message_to_bytes(msg: &Message, buf: &mut [u8]) -> Result<usize, EncodeError> {
-    let mut msg_buf = [0u8; MAX_MESSAGE_SIZE];
-    let msg_len = msg.encode(&mut msg_buf)?;
-    let mut frame = Frame::new(msg.cmd_id(), msg.is_response());
-    frame.data[..msg_len].copy_from_slice(&msg_buf[..msg_len]);
-    frame.data_len = msg_len as u16;
-    frame_to_bytes(&frame, buf)
-}
-
-/// Convert bytes to Message (full frame deserialization)
-pub fn bytes_to_message(data: &[u8]) -> Result<Message, DecodeError> {
-    let frame = bytes_to_frame(data)?;
-    Message::decode(&frame)
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
     #[test]
-    fn test_frame_parser() {
-        let mut parser = FrameParser::new();
-        let frame = Frame::new(0x01, false);
-        let mut buf = [0u8; MAX_FRAME_SIZE];
-        let len = frame_to_bytes(&frame, &mut buf).unwrap();
-        let mut parsed_flag = false;
-        for i in 0..len {
-            if let Ok(Some(parsed)) = parser.feed(buf[i]) {
-                parsed_flag = true;
-                assert_eq!(parsed.cmd, frame.cmd);
-                break;
-            }
-        }
-        assert!(parsed_flag);
-    }
-    #[test]
-    fn test_helpers() {
-        let frame = Frame::new(0x01, false);
-        let mut buf = [0u8; MAX_FRAME_SIZE];
-        let len = frame_to_bytes(&frame, &mut buf).unwrap();
-        let decoded = bytes_to_frame(&buf[..len]).unwrap();
-        assert_eq!(frame.cmd, decoded.cmd);
+    fn test_message_roundtrip() {
+        let mut msg = TcpHeartbeat::default();
+        let wrapped_msg = Message::TcpHeartbeat(msg);
+        let mut frame_buf = [0u8; MAX_FRAME_SIZE];
+        let len = encode_message(&wrapped_msg, &mut frame_buf).unwrap();
+        let decoded_msg = decode_message(&frame_buf[..len]).unwrap();
+        assert_eq!(wrapped_msg, decoded_msg);
     }
 }
+
+// ============================================================================
+// Module Documentation
+// ============================================================================
+
+/// # SIYI Protocol - Generated Module
+///
+/// This module contains message definitions for the **ZT6** camera
+/// using the **TCP** protocol.
+///
+/// ## Features
+///
+/// - **No heap allocation**: All operations use stack-allocated buffers
+/// - **No lifetimes**: All data is owned in fixed-size arrays
+/// - **CRC16 validation**: Automatic frame integrity checking
+/// - **Type-safe enums**: Protocol enumerations with validation
+/// - **No_std compatible**: Works in bare-metal environments
+///
+/// ## Quick Start
+///
+/// ### Encoding a Message
+///
+/// ```rust
+/// use siyi_protocol::zt6_tcp::*;
+///
+/// // Create a request
+/// let request = FirmwareVersionRequest::default();
+///
+/// // Encode to frame buffer
+/// let mut frame_buf = [0u8; MAX_FRAME_SIZE];
+/// let msg = Message::FirmwareVersionRequest(request);
+/// let frame_len = encode_message(&msg, &mut frame_buf).unwrap();
+///
+/// // Send frame_buf[..frame_len] over your transport layer
+/// ```
+///
+/// ### Decoding a Message
+///
+/// ```rust
+/// use siyi_protocol::zt6_tcp::*;
+///
+/// // Receive data from your transport layer
+/// let received_data: &[u8] = /* ... */;
+///
+/// // Decode the frame
+/// match decode_message(received_data) {
+///     Ok(Message::FirmwareVersionResponse(resp)) => {
+///         println!("Camera FW: {}", resp.camera_firmware_ver);
+///     }
+///     Ok(msg) => println!("Other message: {:?}", msg),
+///     Err(e) => eprintln!("Decode error: {:?}", e),
+/// }
+/// ```
+///
+/// ## Protocol Frame Format
+///
+/// ```text
+/// +--------+------+---------+-----+--------+------+---------+
+/// | STX    | CTRL | DATALEN | SEQ | CMD_ID | DATA | CRC16   |
+/// | 2 bytes| 1    | 2       | 2   | 1      | N    | 2 bytes |
+/// +--------+------+---------+-----+--------+------+---------+
+/// ```
+///
+/// - **STX**: Start marker (0x6655, little-endian)
+/// - **CTRL**: Control byte (bit 0: need_ack, bit 1: is_ack)
+/// - **DATALEN**: Data payload length (little-endian)
+/// - **SEQ**: Sequence number (little-endian)
+/// - **CMD_ID**: Command identifier
+/// - **DATA**: Message payload
+/// - **CRC16**: CRC16-CCITT checksum (little-endian)
+///
+/// ## Available Messages
+///
+/// ### System Information
+///
+/// - [`FirmwareVersionRequest`] (0x01): Request firmware version
+/// - [`FirmwareVersionResponse`] (0x01): Firmware version response
+/// - [`HardwareIdRequest`] (0x02): Get hardware ID
+/// - [`HardwareIdResponse`] (0x02): Hardware ID response
+/// - [`SystemTimeRequest`] (0x40): Request system time
+/// - [`SystemTimeResponse`] (0x40): System time
+///
+/// ### Gimbal Control
+///
+/// - [`GimbalRotationRequest`] (0x07): Control gimbal rotation
+/// - [`GimbalRotationResponse`] (0x07): Gimbal rotation response
+/// - [`CenterGimbalRequest`] (0x08): Center gimbal
+/// - [`CenterGimbalResponse`] (0x08): Center response
+/// - [`GimbalAttitudeRequest`] (0x0D): Request gimbal attitude
+/// - [`GimbalAttitudeResponse`] (0x0D): Gimbal attitude data
+/// - [`SetGimbalAttitudeRequest`] (0x0E): Set gimbal angles
+/// - [`SetGimbalAttitudeResponse`] (0x0E): Set attitude response
+/// - [`SingleAxisAttitudeRequest`] (0x41): Set single-axis attitude angle
+/// - [`SingleAxisAttitudeResponse`] (0x41): Single-axis attitude response
+///
+/// ### Camera Functions
+///
+/// - [`CameraSystemInfoRequest`] (0x0A): Request camera system info
+/// - [`CameraSystemInfoResponse`] (0x0A): Camera system info
+/// - [`FunctionFeedback`] (0x0B): Function feedback (sent by camera)
+/// - [`FunctionControl`] (0x0C): Photo/video/mode control
+///
+/// ### Focus and Zoom
+///
+/// - [`AutoFocusRequest`] (0x04): Trigger auto focus
+/// - [`AutoFocusResponse`] (0x04): Auto focus response
+/// - [`ManualZoomRequest`] (0x05): Manual zoom control
+/// - [`ManualZoomResponse`] (0x05): Manual zoom response
+/// - [`ManualFocusRequest`] (0x06): Manual focus control
+/// - [`ManualFocusResponse`] (0x06): Manual focus response
+/// - [`AbsoluteZoomRequest`] (0x0F): Set absolute zoom level
+/// - [`AbsoluteZoomResponse`] (0x0F): Absolute zoom response
+///
+/// ### Thermal Imaging
+///
+/// - [`GetTemperatureAtPointRequest`] (0x12): Get temperature at point
+/// - [`GetTemperatureAtPointResponse`] (0x12): Point temperature
+/// - [`LocalTemperatureMeasurementRequest`] (0x13): Measure temperature in rectangle
+/// - [`LocalTemperatureMeasurementResponse`] (0x13): Local temperature data
+/// - [`GlobalTemperatureMeasurementRequest`] (0x14): Measure global temperature
+/// - [`GlobalTemperatureMeasurementResponse`] (0x14): Global temperature data
+/// - [`PseudoColorRequest`] (0x1A): Request thermal pseudo-color
+/// - [`PseudoColorResponse`] (0x1A): Pseudo-color
+/// - [`SetPseudoColorRequest`] (0x1B): Set thermal pseudo-color
+/// - [`SetPseudoColorResponse`] (0x1B): Set pseudo-color response
+/// - [`ThermalOutputModeRequest`] (0x33): Request thermal output mode
+/// - [`ThermalOutputModeResponse`] (0x33): Thermal output mode
+/// - [`SetThermalOutputModeRequest`] (0x34): Set thermal output mode
+/// - [`SetThermalOutputModeResponse`] (0x34): Set thermal output mode response
+/// - [`GetSingleTemperatureFrameRequest`] (0x35): Get single temperature frame
+/// - [`GetSingleTemperatureFrameResponse`] (0x35): Single temperature frame response
+/// - [`ThermalGainModeRequest`] (0x37): Request thermal gain mode
+/// - [`ThermalGainModeResponse`] (0x37): Thermal gain mode
+/// - [`SetThermalGainModeRequest`] (0x38): Set thermal gain mode
+/// - [`SetThermalGainModeResponse`] (0x38): Set thermal gain mode response
+/// - [`ThermalEnvCorrectionParamsRequest`] (0x39): Request thermal env correction params
+/// - [`ThermalEnvCorrectionParamsResponse`] (0x39): Thermal env correction params
+/// - [`SetThermalEnvCorrectionParamsRequest`] (0x3A): Set thermal env correction params
+/// - [`SetThermalEnvCorrectionParamsResponse`] (0x3A): Set env correction params response
+/// - [`ThermalEnvCorrectionSwitchRequest`] (0x3B): Request env correction switch
+/// - [`ThermalEnvCorrectionSwitchResponse`] (0x3B): Env correction switch
+/// - [`SetThermalEnvCorrectionSwitchRequest`] (0x3C): Set env correction switch
+/// - [`SetThermalEnvCorrectionSwitchResponse`] (0x3C): Set env correction switch response
+/// - [`SendGpsData`] (0x3E): Send GPS raw data to gimbal
+/// - [`ThermalThresholdSwitchRequest`] (0x42): Request thermal threshold switch
+/// - [`ThermalThresholdSwitchResponse`] (0x42): Thermal threshold switch
+/// - [`SetThermalThresholdSwitchRequest`] (0x43): Set thermal threshold switch
+/// - [`SetThermalThresholdSwitchResponse`] (0x43): Set thermal threshold switch response
+/// - [`ThermalThresholdParamsRequest`] (0x44): Request thermal threshold params
+/// - [`ThermalThresholdParamsResponse`] (0x44): Thermal threshold params
+/// - [`SetThermalThresholdParamsRequest`] (0x45): Set thermal threshold params
+/// - [`SetThermalThresholdParamsResponse`] (0x45): Set thermal threshold params response
+/// - [`ThermalThresholdPrecisionRequest`] (0x46): Request thermal threshold precision
+/// - [`ThermalThresholdPrecisionResponse`] (0x46): Thermal threshold precision
+/// - [`SetThermalThresholdPrecisionRequest`] (0x47): Set thermal threshold precision
+/// - [`SetThermalThresholdPrecisionResponse`] (0x47): Set thermal threshold precision response
+///
+/// ### AI Features
+///
+/// - [`AiModeStatusRequest`] (0x4D): Get AI mode status
+/// - [`AiModeStatusResponse`] (0x4D): AI mode status
+/// - [`AiTrackingStreamStatusRequest`] (0x4E): Get AI tracking stream status
+/// - [`AiTrackingStreamStatusResponse`] (0x4E): AI tracking stream status
+/// - [`AiTrackingCoordinateStream`] (0x50): AI tracking coordinate stream
+/// - [`SetAiTrackingStreamStatusRequest`] (0x51): Set AI tracking stream status
+/// - [`SetAiTrackingStreamStatusResponse`] (0x51): Set AI tracking stream response
+///
+/// ### Video Configuration
+///
+/// - [`VideoStitchingModeRequest`] (0x10): Request video stitching mode
+/// - [`VideoStitchingModeResponse`] (0x10): Video stitching mode
+/// - [`SetVideoStitchingModeRequest`] (0x11): Set video stitching mode
+/// - [`SetVideoStitchingModeResponse`] (0x11): Set mode response
+/// - [`EncodingParamsRequest`] (0x20): Request camera encoding params
+/// - [`EncodingParamsResponse`] (0x20): Encoding parameters
+/// - [`SetEncodingParamsRequest`] (0x21): Set camera encoding params
+/// - [`SetEncodingParamsResponse`] (0x21): Set encoding response
+///
+/// ### Data Streams
+///
+/// - [`SendAircraftAttitude`] (0x22): Send aircraft attitude to gimbal
+/// - [`SendRcChannelDataRequest`] (0x23): Send RC channel data to gimbal
+/// - [`RequestFlightControllerDataStreamRequest`] (0x24): Request flight controller to send data stream
+/// - [`RequestFlightControllerDataStreamResponse`] (0x24): Flight controller data stream response
+///
+/// ### Configuration
+///
+/// - [`TcpHeartbeat`] (0x00): TCP heartbeat keepalive
+/// - [`SetUtcTimeRequest`] (0x30): Set UTC time
+/// - [`SetUtcTimeResponse`] (0x30): UTC time response
+/// - [`FormatSdCardRequest`] (0x48): Format SD card
+/// - [`FormatSdCardResponse`] (0x48): Format SD card response
+/// - [`GetPictureNameTypeRequest`] (0x49): Get picture name type
+/// - [`GetPictureNameTypeResponse`] (0x49): Picture name type
+/// - [`SetPictureNameTypeRequest`] (0x4A): Set picture name type
+/// - [`SetPictureNameTypeResponse`] (0x4A): Set picture name type response
+/// - [`HdmiOsdStatusRequest`] (0x4B): Request HDMI OSD status
+/// - [`HdmiOsdStatusResponse`] (0x4B): HDMI OSD status
+/// - [`SetHdmiOsdStatusRequest`] (0x4C): Set HDMI OSD status
+/// - [`SetHdmiOsdStatusResponse`] (0x4C): Set HDMI OSD status response
+/// - [`UpdateThermalShutterRequest`] (0x4F): Manually update thermal shutter
+/// - [`UpdateThermalShutterResponse`] (0x4F): Update thermal shutter response
+/// - [`SoftRebootRequest`] (0x80): Gimbal camera soft reboot
+/// - [`SoftRebootResponse`] (0x80): Soft reboot response
+/// - [`GetIpAddressRequest`] (0x81): Get gimbal camera IP address
+/// - [`GetIpAddressResponse`] (0x81): IP address
+/// - [`SetIpAddressRequest`] (0x82): Set gimbal camera IP address
+/// - [`SetIpAddressResponse`] (0x82): Set IP address response
+///
+/// ## Constants
+///
+/// - [`STX`]: Protocol start marker (0x6655)
+/// - [`MAX_MESSAGE_SIZE`]: Maximum message payload size (512 bytes)
+/// - [`MAX_FRAME_SIZE`]: Maximum complete frame size (522 bytes)
+///
+/// ## Error Types
+///
+/// - [`EncodeError`]: Errors that can occur during message encoding
+///   - `BufferTooSmall`: Output buffer is too small for the message
+///
+/// - [`DecodeError`]: Errors that can occur during message decoding
+///   - `FrameTooShort`: Frame is shorter than minimum size
+///   - `InvalidStx`: Start marker does not match expected value
+///   - `FrameIncomplete`: Frame is incomplete based on length field
+///   - `CrcMismatch`: CRC check failed
+///   - `NotEnoughBytes`: Not enough bytes to decode field
+///   - `InvalidEnumValue`: Enum value is not valid
+///   - `ConversionError`: Type conversion failed
+///   - `UnknownCmdId`: Unknown command ID
+///
+/// ## Memory Requirements
+///
+/// - Message encoding buffer: 512 bytes (stack)
+/// - Frame encoding buffer: 522 bytes (stack)
+/// - Per-message overhead: Varies by message type
+///
+/// All buffers are stack-allocated. No heap allocation is required.
+///
+/// ## Protocol-Specific Notes
+///
+/// ### TCP Protocol
+///
+/// - Default port: 37260
+/// - Connection-oriented with guaranteed delivery
+/// - Requires periodic heartbeat messages (0x00) to maintain connection
+/// - Recommended heartbeat interval: 1-2 seconds
+/// - All messages are supported over TCP
+///
+/// ## Camera-Specific Notes
+///
+/// ### ZT6
+///
+/// - Thermal imaging camera
+/// - AI tracking features
+/// - Video stitching modes
+/// - No laser ranging
+///
+/// ## Data Encoding Notes
+///
+/// ### Angles
+///
+/// Angles are encoded as integers multiplied by 10:
+///
+/// ```rust
+/// // Encoding: 45.5 degrees
+/// let angle_deg = 45.5;
+/// let angle_protocol = (angle_deg * 10.0) as i16;  // 455
+///
+/// // Decoding:
+/// let received_value = 455i16;
+/// let angle_deg = received_value as f32 / 10.0;  // 45.5
+/// ```
+///
+/// ### Temperatures
+///
+/// Temperatures are encoded as integers multiplied by 100:
+///
+/// ```rust
+/// // Encoding: 25.37°C
+/// let temp_celsius = 25.37;
+/// let temp_protocol = (temp_celsius * 100.0) as u16;  // 2537
+///
+/// // Decoding:
+/// let received_value = 2537u16;
+/// let temp_celsius = received_value as f32 / 100.0;  // 25.37
+/// ```
+///
+/// ### Distances
+///
+/// Laser distances are measured in decimeters (dm):
+///
+/// ```rust
+/// // Encoding: 150 meters
+/// let distance_m = 150.0;
+/// let distance_dm = (distance_m * 10.0) as u16;  // 1500
+///
+/// // Decoding:
+/// let received_value = 1500u16;
+/// let distance_m = received_value as f32 / 10.0;  // 150.0
+/// ```
+///
+/// Minimum valid distance: 5.0 meters (50 dm)
+///
+/// ## Examples
+///
+/// ### Getting Gimbal Attitude
+///
+/// ```rust
+/// use siyi_protocol::zt6_tcp::*;
+///
+/// let request = GimbalAttitudeRequest::default();
+/// let msg = Message::GimbalAttitudeRequest(request);
+///
+/// let mut frame_buf = [0u8; MAX_FRAME_SIZE];
+/// let len = encode_message(&msg, &mut frame_buf).unwrap();
+///
+/// // Send frame_buf[..len] and receive response
+/// // let response_data: &[u8] = receive_from_camera();
+///
+/// // Decode response
+/// // match decode_message(response_data) {
+/// //     Ok(Message::GimbalAttitudeResponse(resp)) => {
+/// //         let yaw = resp.yaw as f32 / 10.0;
+/// //         let pitch = resp.pitch as f32 / 10.0;
+/// //         println!("Yaw: {:.1}°, Pitch: {:.1}°", yaw, pitch);
+/// //     }
+/// //     _ => {}
+/// // }
+/// ```
+///
+/// ### Setting Gimbal Position
+///
+/// ```rust
+/// use siyi_protocol::zt6_tcp::*;
+///
+/// // Set to 45° yaw, -30° pitch
+/// let yaw = (45.0 * 10.0) as i16;
+/// let pitch = (-30.0 * 10.0) as i16;
+///
+/// let mut request = SetGimbalAttitudeRequest::default();
+/// request.yaw = yaw;
+/// request.pitch = pitch;
+///
+/// let msg = Message::SetGimbalAttitudeRequest(request);
+/// let mut frame_buf = [0u8; MAX_FRAME_SIZE];
+/// let len = encode_message(&msg, &mut frame_buf).unwrap();
+/// ```
+///
+/// ## See Also
+///
+/// - [SIYI SDK Documentation](https://shop.siyi.biz/)
+/// - [Protocol Specification](https://github.com/AhmedBoin/siyi-protocol/blob/main/PROTOCOL.md)
+/// - [Examples](https://github.com/AhmedBoin/siyi-protocol/tree/main/examples)
+///
+#[allow(unused)]
+const _DOCUMENTATION: () = ();

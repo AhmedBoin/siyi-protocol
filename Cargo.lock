@@ -3,5 +3,5 @@
 version = 4
 
 [[package]]
-name = "siyi-gimbl-camera-protocol"
+name = "siyi-protocol"
 version = "0.1.0"

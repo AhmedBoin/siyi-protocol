@@ -1,6 +1,32 @@
 [package]
-name = "siyi-gimbl-camera-protocol"
+name = "siyi-protocol"
 version = "0.1.0"
 edition = "2024"
 
 [dependencies]
+
+[features]
+default = []
+
+# Protocols
+tcp = []
+udp = []
+ttl = []
+
+# Cameras
+zt30 = []
+zt6 = []
+zr30 = []
+zr10 = []
+a8mini = []
+a2mini = []
+
+all = ["tcp", "udp", "ttl", "zt30", "zt6", "zr30", "zr10", "a8mini", "a2mini"]
+
+[[example]]
+name = "deserialize_messages"
+required-features = ["zt30", "tcp"]
+
+[[example]]
+name = "serialize_messages"
+required-features = ["zt30", "tcp"]
