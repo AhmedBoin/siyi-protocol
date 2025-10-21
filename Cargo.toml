@@ -2,6 +2,15 @@
 name = "siyi-protocol"
 version = "0.1.0"
 edition = "2024"
+authors = ["Mohamed A.Taha <Ahmed.Boin@gmail.com>"]
+description = "SIYI Gimbal and Camera SDK Protocol"
+license = "MIT"
+repository = "https://github.com/AhmedBoin/siyi-protocol"
+readme = "README.md"
+keywords = ["siyi", "no-std"]
+categories = ["accessibility", "aerospace"]
+documentation = "https://docs.rs/siyi-protocol"
+homepage = "https://github.com/AhmedBoin/siyi-protocol"
 
 [dependencies]
 
